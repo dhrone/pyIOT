@@ -23,15 +23,15 @@ class Thing(object):
     def __init__(self, endpoint=None, thingName=None, rootCAPath=None, certificatePath=None, privateKeyPath=None, region=None, components=None):
         ''' Initialize connection to AWS IOT shadow service
 
-		Args:
-			endpoint (str): URL of the IOT-Core endpoint assigned.  This is provided by the AWS IOT-Core service.
-			thingName (str): The name of your IOT device.  Must be globally unique within your AWS account.
-			rootCAPath (str): Path to the file which holds a valid AWS root certificate.
-			certificatePath (str): Path to the file which holds the certificate for your IOT device.  Received from AWS IOT-Core during device creation.
-			privateKeyPath (str): Path to the file which holds the private key for your IOT device.  Received from AWS IOT-Core during device creation.
-			region (str): The name of the AWS region that your IOT device was created in (e.g. 'us-east-1')
-			components (:obj:`list` of :obj:`Component`): A list of the component objects that make up the IOT device
-		'''
+        Args:
+            endpoint (str): URL of the IOT-Core endpoint assigned.  This is provided by the AWS IOT-Core service.
+            thingName (str): The name of your IOT device.  Must be globally unique within your AWS account.
+            rootCAPath (str): Path to the file which holds a valid AWS root certificate.
+            certificatePath (str): Path to the file which holds the certificate for your IOT device.  Received from AWS IOT-Core during device creation.
+            privateKeyPath (str): Path to the file which holds the private key for your IOT device.  Received from AWS IOT-Core during device creation.
+            region (str): The name of the AWS region that your IOT device was created in (e.g. 'us-east-1')
+            components (:obj:`list` of :obj:`Component`): A list of the component objects that make up the IOT device
+        '''
 
         self._eventQueue = queue.Queue()
         self._localShadow = dict() # dictionary of local property values
@@ -183,20 +183,20 @@ class Thing(object):
 class Component(object):
     ''' Component that makes up part of an IOT thing.
 
-	Components are responsible for monitoring the underlying physical component, updating dependent properties associated with the component, and responding to updates of those properties by sending the appropriate commands to the component to get it to update its status to be consistent with its published properites '''
+    Components are responsible for monitoring the underlying physical component, updating dependent properties associated with the component, and responding to updates of those properties by sending the appropriate commands to the component to get it to update its status to be consistent with its published properites '''
     _logger = logging.getLogger(__name__)
 
     def __init__(self, name = None, stream = None, properties = None, eol='\n', timeout=5, synchronous=False):
         ''' Initialize component driver and set it to receive updates from the Thing
 
-		Args:
-		 	name (str): The name of the component
-			stream (:obj:`IOBase`): A stream object that receives and can send data to the physical device
-			properties (dict): A dictionary composed of the properties the component manages and their initial values
-			eol (str, optional): The substring that represents end of command within the stream for the component.  Default is newline (e.g. `\\n`)
-			timeout (float, optional): The time in seconds to wait for input from the device before the read attempt times out.  Default is 5 seconds.
-			synchronous (bool, optional): Determines how reading and writing are handled.  Synchronous devices only respond when written to.  Default is False (e.g. asynchronous)
-		'''
+        Args:
+             name (str): The name of the component
+            stream (:obj:`IOBase`): A stream object that receives and can send data to the physical device
+            properties (dict): A dictionary composed of the properties the component manages and their initial values
+            eol (str, optional): The substring that represents end of command within the stream for the component.  Default is newline (e.g. `\\n`)
+            timeout (float, optional): The time in seconds to wait for input from the device before the read attempt times out.  Default is 5 seconds.
+            synchronous (bool, optional): Determines how reading and writing are handled.  Synchronous devices only respond when written to.  Default is False (e.g. asynchronous)
+        '''
 
         self._stream = stream
         self._eol = eol
@@ -213,12 +213,12 @@ class Component(object):
         self._close()
 
     def start(self, eventQueue):
-		''' Start the threads that will read and write data to the device.  If the device is asynchronous two threads will be started.  If synchronous only the write thread will be used.
+        ''' Start the threads that will read and write data to the device.  If the device is asynchronous two threads will be started.  If synchronous only the write thread will be used.
 
-		Args:
-			eventQueue (:obj:`Queue`): The queue of the Thing that will be used to send back reported state messages
+        Args:
+            eventQueue (:obj:`Queue`): The queue of the Thing that will be used to send back reported state messages
 
-		'''
+        '''
         self._eventQueue = eventQueue
 
         # Starting event loops
@@ -484,11 +484,11 @@ class Component(object):
     def queryStatus(self):
         ''' Override this function if you want to periodically query your component for status.  You can check the component state (such as power status) to determine what query to send.  The response can be either a string or a list of strings.  If you return a list, each list item will be sent to the component individually including gathering and handling any response the query generates.
 
-		Example: (from an Epson ESC/VP21 compliant projector)
-		    def queryStatus(self):
-		        if self.properties['powerState'] == 'ON':
-		            return ['PWR?\r','SOURCE?\r'] # Send two queries; PWR? to request current power status and SOURCE? to determine what video input is selected
-		        else:
-		            return 'PWR?\r' # If power is off, the project will not respond to the SOURCE? query so only check to see if the power state has changed.
-		'''
+        Example: (from an Epson ESC/VP21 compliant projector)
+            def queryStatus(self):
+                if self.properties['powerState'] == 'ON':
+                    return ['PWR?\r','SOURCE?\r'] # Send two queries; PWR? to request current power status and SOURCE? to determine what video input is selected
+                else:
+                    return 'PWR?\r' # If power is off, the project will not respond to the SOURCE? query so only check to see if the power state has changed.
+        '''
         return None
