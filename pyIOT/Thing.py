@@ -1,11 +1,4 @@
 # -*- coding: utf-8 -*-
-"""pyIOT: making the creation of a python-based Internet of Things (IOT) device easy.
-
-pyIOT enables rapid integration of a device with the Amazon AWS IOT-Core service.  In IOT-Core, a thing is represented by a set of properties which represent the state of the IOT device.  Within IOT-Core, these properties are stored as key-value pairs inside a structure called a device Shadow which is a JSON object containing three key-value pair sets (desired, reported, delta).  When an application wants to cause an IOT device to do something, it changes the desired state within the Shadow to the value that will cause the requested change.  pyIOT listens for these updates and then handles the conversion of the request into the specific message needed by the device to cause the appropriate change to occur.  When the device itself changes, pyIOT also handles converting the data coming from the device into a valid property value and sending that to the IoT-Core Shadow for the IOT device.
-
-pyIOT models an IOT device as a Thing which is composed of at least one but potentially several components.  Each component is responsible for interacting with a physical device that it controls.  This requires the component to monitor the state of the device and update the components property values as appropriate.  It must also accept changes to those property values and then cause the device to change state to be consistent with itself.  The Thing manages the collection of components that make of the IOT device.  It listens for delta messages from IOT-Core which are sent when the desired and reported states for a device differ.  It then figures out which component is responsible for each property that needs to change, and sends a request for change to it.  Similarly, if the component is what has changed, the Thing receives a message from the component and handles sending that back to the IOT-Core service.
-
-"""
 from threading import Lock, Thread
 import serial
 import logging
@@ -17,21 +10,25 @@ import time
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTShadowClient
 
 class Thing(object):
-    ''' A thing is composed of one or more components that publishes their status to the AWS IOT service in the form of a set of properties and accepts changes to those properties updating the underlying components as needed. '''
+    ''' A thing is composed of one or more components that publishes their status to the AWS IOT service in the form of a set of properties and accepts changes to those properties updating the underlying components as needed.
+
+        Args:
+            endpoint (`str`): URL of the IOT-Core endpoint assigned.  This is provided by the AWS IOT-Core service
+            thingName (`str`): The name of your IOT device.  Must be globally unique within your AWS account
+            rootCAPath (`str`): Path to the file which holds a valid AWS root certificate
+            certificatePath (`str`): Path to the file which holds the certificate for your IOT device.  Received from AWS IOT-Core during device creation
+            privateKeyPath (`str`): Path to the file which holds the private key for your IOT device.  Received from AWS IOT-Core during device creation
+            region (`str`): The name of the AWS region that your IOT device was created in (e.g. 'us-east-1')
+            components (`list` of :obj:`Component`): A list of the component objects that make up the IOT device
+
+    '''
     _logger = logging.getLogger(__name__)
 
     def __init__(self, endpoint=None, thingName=None, rootCAPath=None, certificatePath=None, privateKeyPath=None, region=None, components=None):
         ''' Initialize connection to AWS IOT shadow service
-
-        Args:
-            endpoint (str): URL of the IOT-Core endpoint assigned.  This is provided by the AWS IOT-Core service.
-            thingName (str): The name of your IOT device.  Must be globally unique within your AWS account.
-            rootCAPath (str): Path to the file which holds a valid AWS root certificate.
-            certificatePath (str): Path to the file which holds the certificate for your IOT device.  Received from AWS IOT-Core during device creation.
-            privateKeyPath (str): Path to the file which holds the private key for your IOT device.  Received from AWS IOT-Core during device creation.
-            region (str): The name of the AWS region that your IOT device was created in (e.g. 'us-east-1')
-            components (:obj:`list` of :obj:`Component`): A list of the component objects that make up the IOT device
         '''
+
+
 
         self._eventQueue = queue.Queue()
         self._localShadow = dict() # dictionary of local property values
@@ -112,10 +109,23 @@ class Thing(object):
             self._logger.info('Delta Message: processing item [{0}][{1}]'.format(property, payloadDict['state'][property]))
             self._eventQueue.put({'source': '__thing__', 'action': 'UPDATE', 'property': property, 'value': payloadDict['state'][property] })
 
+    def start(self):
+        ''' Start processing events between the IOT service and the associated components '''
+        self._main()
+
     def onChange(self, updatedProperties):
         ''' Override this function if you need to update other component properties based upon the change of another property
 
+        Args:
+            updatedProperties (`dict`): A dictionary of property values that have just changed
+
+        Returns:
+            A `list` of `tuples` consisting of the propertyName and the value it has been changed to by the onChange method (e.g. [('powerState', 'ON')])
+
         Example:
+
+        .. code-block:: python
+
             def onChange(self, updatedProperties):
                 rv = []
                 # Make sure component is always on and set to the CD input when not watching TV
@@ -125,13 +135,11 @@ class Thing(object):
                     rv.append(('input', 'CD'))
                 return rv
 
-        Note that you can update all property values. This allows you to handle the situation where one IOT property impacts the state of multiple components '''
+        Note that you can update all property values. This allows you to handle the situation where one IOT property impacts the state of multiple components
+
+        '''
 
         return None
-
-    def start(self):
-        ''' Start processing events between the IOT service and the associated components '''
-        self._main()
 
     def _main(self):
 
