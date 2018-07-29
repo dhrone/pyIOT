@@ -8,22 +8,21 @@ import queue
 import time
 
 class Component(object):
-    ''' Component that makes up part of an IOT thing.
+    ''' Components are responsible for monitoring the underlying physical component, updating dependent properties associated with the component, and responding to updates of those properties by sending the appropriate commands to the component to get it to update its status to be consistent with its published properites
 
-    Components are responsible for monitoring the underlying physical component, updating dependent properties associated with the component, and responding to updates of those properties by sending the appropriate commands to the component to get it to update its status to be consistent with its published properites '''
+    Args:
+        name (str): The name of the component
+        stream (:obj:`IOBase`): A stream object that receives and can send data to the physical device
+        properties (dict): A dictionary composed of the properties the component manages and their initial values
+        eol (str, optional): The substring that represents end of command within the stream for the component.  Default is newline (e.g. `\\n`)
+        timeout (float, optional): The time in seconds to wait for input from the device before the read attempt times out.  Default is 5 seconds.
+        synchronous (bool, optional): Determines how reading and writing are handled.  Synchronous devices only respond when written to.  Default is False (e.g. asynchronous)
+
+    '''
     _logger = logging.getLogger(__name__)
 
     def __init__(self, name = None, stream = None, properties = None, eol='\n', timeout=5, synchronous=False):
-        ''' Initialize component driver and set it to receive updates from the Thing
-
-        Args:
-             name (str): The name of the component
-            stream (:obj:`IOBase`): A stream object that receives and can send data to the physical device
-            properties (dict): A dictionary composed of the properties the component manages and their initial values
-            eol (str, optional): The substring that represents end of command within the stream for the component.  Default is newline (e.g. `\\n`)
-            timeout (float, optional): The time in seconds to wait for input from the device before the read attempt times out.  Default is 5 seconds.
-            synchronous (bool, optional): Determines how reading and writing are handled.  Synchronous devices only respond when written to.  Default is False (e.g. asynchronous)
-        '''
+        ''' Initialize component driver and set it to receive updates from the Thing '''
 
         self._stream = stream
         self._eol = eol
@@ -39,7 +38,7 @@ class Component(object):
     def __del__(self):
         self._close()
 
-    def start(self, eventQueue):
+    def _start(self, eventQueue):
         ''' Start the threads that will read and write data to the device.  If the device is asynchronous two threads will be started.  If synchronous only the write thread will be used.
 
         Args:
@@ -50,12 +49,12 @@ class Component(object):
 
         # Starting event loops
         _threadWrite = Thread(target=self._writeLoop)
-        _threadWrite.start()
+        _threadWrite._start()
 
         # If component is asynchronous, start an independent read thread
         if not self._synchronous:
             _threadRead = Thread(target=self._readLoop)
-            _threadRead.start()
+            _threadRead._start()
 
     def updateComponent(self, property, value):
         ''' This method is normally called by the Thing that contains the component to tell the component to update its status.  It can also be called by other processes that need to tell the component to update itself
@@ -81,19 +80,19 @@ class Component(object):
 
     @classmethod
     def componentToProperty(cls, property, regex):
-        ''' Decorate the method that should be used to convert a particular response from the component to a property value.
+        ''' Decorates the method that should be used to convert a particular response from the component to a property value.
 
         A basic challenge when creating an AWS IOT driver is how to take state information from the component and convert it to the values you want to use to represent the component's state.  **componentToProperty** allows you to decorate methods to handle each required translation from raw component input into the resulting property value(s).
 
         Args:
           property (str or `list` of str): the property name (or names) that the response is updating
-          regex (str): A regex that exactly matches the input.  The regex must include a group around each value that will be used to update the properties. The group value is what will be passed into the decorated function.  The regex string should match the entire response to make sure that all of the response is correctly included in the property update.
+          regex (str): A regex that exactly matches a valid message coming from the physical component.  The regex must include a group around each value that will be used to update the properties. The group value is what will be passed into the decorated function.  The regex string should match the entire response to make sure that all of the message is correctly included in the property update.
 
         **Examples:**
 
             *These examples are from code used to control an Anthem AVM processor*
 
-            A method decorated by **componentToProperty** must accept the name of the parameter that is being handled and the value received from the component.  This value is extracted from the component's response using the regex included within the componentToProperty decoration call.  Only the matched portion of the response (e.g. the part included within the parenthesis) will be passed into your method.  The method must return the value that the IOT service should assign to the property.  Any variable types allowed by the IOT service are supported.
+            A method decorated by **componentToProperty** must accept the name of the parameter that is being handled and the value extracted from the message that was received from the component.  This value is extracted using the regex included within the componentToProperty decoration call.  Only the matched portion of the response (e.g. the part included within the parenthesis) will be passed into your method.  The method must return the value that the IOT service should assign to the property.  Any variable types allowed by the IOT service are supported.
 
             If the method receives a property name or value that it can not handle, it should raise a TypeError or ValueError.
 
@@ -141,7 +140,7 @@ class Component(object):
                     else:
                         raise TypeError('ERR: {0} INVALID {1} VALUE'.format(value, property))
 
-            In our second example we show how to handle multiple properties from a single device message.  The AVM processor can send a string which has embedded in data that will update multiple properties.  In this case, we want to extract three of those properties.  So, the provided regex includes exactly three match groups.  When used in this way, you should expect the decorated function to be called three times whenever the matching input is sent from the component.  This is once per property.  In each call, the property that is being handled will be provided for the property parameter and the corresponding group value will be provided for the value parameter.
+            In our second example we show how to handle multiple properties from a single device message.  The AVM processor can send messages which refer to multiple properties.  In this example we are handling a message which provides the selected input, current volume, the mute status.  We want to extract those three properties.  So, the provided regex includes exactly three match groups.  When used in this way, you should expect the decorated function to be called three times whenever the matching input is sent from the component.  This is once per property.  In each call, the property that is being handled will be provided for the property parameter and the corresponding group value will be provided for the value parameter.
 
         '''
 
@@ -156,7 +155,7 @@ class Component(object):
 
     @classmethod
     def propertyToComponent(cls, property, cmd):
-        ''' Decorate the method that should be used to convert a property value into a component command.
+        ''' Decorates the method that should be used to convert a property value into a component command.
 
         A basic challenge when creating an AWS IOT driver is how to respond to a change in a property value and translate that into the input the component needs to change its state accordingly.  propertyToComponent allows you to decorate a set of methods that handle these translations.
 
