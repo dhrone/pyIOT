@@ -12,9 +12,7 @@ pyIOT
 .. moduleauthor:: dhrone
 .. module:: pyIOT
 
-pyIOT enables rapid integration of a device with the Amazon AWS IOT-Core service.  In IOT-Core, a thing is represented by a set of properties which represent the state of the IOT device.  Within IOT-Core, these properties are stored as key-value pairs inside a structure called a device Shadow which is a JSON object containing three key-value pair sets (desired, reported, delta).  When an application wants to cause an IOT device to do something, it changes the desired state within the Shadow to the value that will cause the requested change.  pyIOT listens for these updates and then handles the conversion of the request into the specific message needed by the device to cause the appropriate change to occur.  When the device itself changes, pyIOT also handles converting the data coming from the device into a valid property value and sending that to the IoT-Core Shadow for the IOT device.
-
-More details about AWS IOT-Core can be found at https://aws.amazon.com/iot-core/.
+pyIOT enables rapid integration of a device with the Amazon AWS IOT-Core service.
 
 .. image:: _static/pyIOT_Start.jpg
 
@@ -35,6 +33,11 @@ Example Project
 ===============
 
 This is where the example project using the Epson and AVM components will go
+
+.. toctree::
+  :maxdepth: 2
+
+  example
 
 API Guide
 =========
