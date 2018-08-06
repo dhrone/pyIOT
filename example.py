@@ -311,15 +311,28 @@ class Epson1080UB(Component):
         raise ValueError('{0} is not a valid input'.format(value))
 
 
-class condoTVThing(Thing):
+class TVThing(Thing):
 
     def onChange(self, updatedProperties):
         rv = []
-        # Make sure AVM is always on and set to the Alexa input when not watching TV
+        # An Alexa dot is connected to the AUX input.  Make sure preamp is always on and set to the AUX input when not doing something else
         if updatedProperties.get('powerState') == 'OFF':
             print ('Returning powerState to ON and input to Alexa')
             rv.append(('powerState','ON'))
-            rv.append(('input', 'CD'))
+            rv.append(('input', 'AUX'))
+			rv.append(('powerProjector', 'OFF'))
+
+		# If preamp is not set to an input associated with Video, turn projector off
+		if updatedProperties.get('powerState') == 'ON' and updatedProperties.get('input') not in ['TV', 'DVD']:
+			rv.append(('powerProjector', 'OFF'))
+
+		# If preamp is set to an input associated with Video, turn projector on and set to correct projector input for the chosen preamp input
+		if updatedProperties.get('powerState') == 'ON' and (updatedProperties.get('input') in ['TV', 'DVD']:
+			rv.append(('powerProjector', 'ON'))
+			if updatedProperties.get('input') == 'TV':
+				rv.append('inputProjector', 'HDMI1')
+			else:
+				rv.append('inputProjector', 'HDMI2')
         return rv
 
 if __name__ == u'__main__':

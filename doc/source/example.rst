@@ -222,7 +222,7 @@ Epson ESC/VP21 automation protocol
 
 The Epson 1080UB uses Epson's ESC/VP21 automation protocol.  It is a synchronous protocol only responding as a result of a command being sent to it.  This means that you must poll the projector to find out what changes may have occurred to it.
 
-The format for a message is :<command> <parameter>\\r with the projector providing the ':' character and the controlling system providing the command, parameter and the carriage return '\\r'.
+The format for a message is :<command> <parameter>\\r with the projector providing the ':' character and the controlling system providing the command, parameter and the carriage return '\\r'.  So for this projector, end of line is '\\r:' as opposed to the more standard '\\n'.
 
 We will use the following subset of the Epson ESC/VP21 automation protocol
 
@@ -293,3 +293,8 @@ projectorComponent source code
         def ready(self):
     		''' Projector stops accepting commands while turning on or off (up to 30 seconds) '''
             return True if self.properties['projPowerState'] in ['ON', 'OFF', 'UNKNOWN'] else False
+
+Writing the Thing
+-------------------------------
+
+The Thing in a pyIOT project is used to contain all of the components that make up the thing.  It listens to AWS IOT-Core, routing received messages to the appropriate component.  It also passes messages from the components to AWS IOT-Core so that IOT-Core has up-to-date information about the Thing's state.  Finally it is responsible for coordinating state between it's components.  If a component changes state that impacts the state of a different component, the Thing uses its onChange method to determine what additional property value changes should also be commanded.  This last feature is not always needed but is often required with multi-component Things.
