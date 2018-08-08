@@ -2,7 +2,6 @@ from pyIOT import Thing, Component
 
 import serial
 
-
 class preampComponent(Component):
 
     ''' COMPONENT TO PROPERTY METHODS '''
@@ -81,9 +80,9 @@ class preampComponent(Component):
         else:
             return 'P1P?\n'
 
-	''' UTILITY METHODS '''
+    ''' UTILITY METHODS '''
 
-    ''' The remaining methods are to handle the conversation from volume to db and vice-versa '''
+    ''' The remaining methods are to handle the conversion from volume to db and vice-versa '''
     @staticmethod
     def _volumeToDb(v):
         ''' Convert a volume in the range 0 to 100 into a db value.  This provides an exponential curve from -69db to +10db. '''
@@ -92,7 +91,7 @@ class preampComponent(Component):
     ''' compute array of possible volume to db values '''
     _volArray = []
     for v in range (0,101):
-      _volArray.append(_volumeToDb(v))
+      _volArray.append(_volumeToDb.__func__(v))
     del v
 
     @staticmethod
@@ -163,10 +162,10 @@ class projectorComponent(Component):
         else:
             return 'PWR?\r'
 
-	''' READY STATE METHOD '''
+    ''' READY STATE METHOD '''
 
     def ready(self):
-		''' Projector stops accepting commands while turning on or off (up to 30 seconds) '''
+        ''' Projector stops accepting commands while turning on or off (up to 30 seconds) '''
         return True if self.properties['projPowerState'] in ['ON', 'OFF', 'UNKNOWN'] else False
 
 
@@ -320,25 +319,25 @@ class TVThing(Thing):
             print ('Returning powerState to ON and input to Alexa')
             rv.append(('powerState','ON'))
             rv.append(('input', 'AUX'))
-			rv.append(('powerProjector', 'OFF'))
+            rv.append(('powerProjector', 'OFF'))
 
-		# If preamp is not set to an input associated with Video, turn projector off
-		if updatedProperties.get('powerState') == 'ON' and updatedProperties.get('input') not in ['TV', 'DVD']:
-			rv.append(('powerProjector', 'OFF'))
+        # If preamp is not set to an input associated with Video, turn projector off
+        if updatedProperties.get('powerState') == 'ON' and updatedProperties.get('input') not in ['TV', 'DVD']:
+            rv.append(('powerProjector', 'OFF'))
 
-		# If preamp is set to an input associated with Video, turn projector on and set to correct projector input for the chosen preamp input
-		if updatedProperties.get('powerState') == 'ON' and (updatedProperties.get('input') in ['TV', 'DVD']:
-			rv.append(('powerProjector', 'ON'))
-			if updatedProperties.get('input') == 'TV':
-				rv.append('inputProjector', 'HDMI1')
-			else:
-				rv.append('inputProjector', 'HDMI2')
+        # If preamp is set to an input associated with Video, turn projector on and set to correct projector input for the chosen preamp input
+        if updatedProperties.get('powerState') == 'ON' and updatedProperties.get('input') in ['TV', 'DVD']:
+            rv.append(('powerProjector', 'ON'))
+            if updatedProperties.get('input') == 'TV':
+                rv.append('inputProjector', 'HDMI1')
+            else:
+                rv.append('inputProjector', 'HDMI2')
         return rv
 
 if __name__ == u'__main__':
 
     try:
-        condoAVM = AVM('/dev/ttyUSB0',9600)
+        preamp = preampComponent('/dev/ttyUSB0',9600)
 
         condoTV = condoTVThing(endpoint='aamloz0nbas89.iot.us-east-1.amazonaws.com', thingName='condoTV', rootCAPath='root-CA.crt', certificatePath='condoTV.crt', privateKeyPath='condoTV.private.key', region='us-east-1', components=[condoAVM])
         condoTV.start()

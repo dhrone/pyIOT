@@ -25,11 +25,8 @@ class Thing(object):
     _logger = logging.getLogger(__name__)
 
     def __init__(self, endpoint=None, thingName=None, rootCAPath=None, certificatePath=None, privateKeyPath=None, region=None, components=None):
-        ''' Initialize connection to AWS IOT shadow service
-        '''
-
-
-
+        ''' Initialize connection to AWS IOT shadow service '''
+        
         self._eventQueue = queue.Queue()
         self._localShadow = dict() # dictionary of local property values
         self._propertyHandlers = dict() # dictionary to set which component handles which property values
@@ -187,4 +184,3 @@ class Thing(object):
                     payloadDict['state']['desired'] = updatedProperties
             if updateNeeded:
                 self._shadowHandler.shadowUpdate(json.dumps(payloadDict), self._updateCallback, 5)
-                

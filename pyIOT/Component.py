@@ -21,19 +21,20 @@ class Component(object):
     '''
     _logger = logging.getLogger(__name__)
 
-    def __init__(self, name = None, stream = None, properties = None, eol='\n', timeout=5, synchronous=False):
+    def __init__(self, name = None, stream = None, eol='\n', timeout=5, synchronous=False):
         ''' Initialize component driver and set it to receive updates from the Thing '''
 
         self._stream = stream
         self._eol = eol
         self._timeout = timeout
         self._synchronous = synchronous
-        self.properties = properties # dictionary of the properties and starting values for component
         self.__name__ = name if name is not None else self.__class__.__name__
         self._componentQueue = queue.Queue()
         self._readlock = Lock()
         self._waitFor = None # Are we waiting for a specific value from the component
         self._exit = False # Set when a request has been made to exit the component driver
+
+        self._initializeProperties() # Determine what properties are being handled
 
     def __del__(self):
         self._close()
@@ -196,8 +197,8 @@ class Component(object):
     def _componentToProperty(cls, value):
         for supercls in cls.__mro__:  # This makes inherited Appliances work
             for method in supercls.__dict__.values():
-                d2pList = getattr(method, '__componentToProperty__', {})
-                for cre, (property, method) in d2pList.items():
+                c2pList = getattr(method, '__componentToProperty__', {})
+                for cre, (property, method) in c2pList.items():
                     match = cre.match(value)
                     if match:
                         return (property, method, match)
@@ -207,9 +208,43 @@ class Component(object):
     def _propertyToComponent(cls, property):
         for supercls in cls.__mro__:  # This makes inherited Appliances work
             for method in supercls.__dict__.values():
-                p2dList = getattr(method, '__propertyToComponent__', {})
-                if p2dList and property in p2dList:
-                    return p2dList.get(property)
+                p2cList = getattr(method, '__propertyToComponent__', {})
+                if p2cList and property in p2dList:
+                    return p2cList.get(property)
+
+    def _initializeProperties(self):
+        cls = self.__class__
+        p2cProperties = {}
+        c2pProperties = {}
+        for supercls in cls.__mro__:  # This makes inherited Appliances work
+            for method in supercls.__dict__.values():
+                c2pList = getattr(method, '__componentToProperty__', {})
+                p2cList = getattr(method, '__propertyToComponent__', {})
+                if p2cList:
+                    for k in p2cList:
+                        p2cProperties[k] = 'UNKNOWN'
+                if c2pList:
+                    for cre, (property, method) in c2pList.items():
+                        if type(property) is list:
+                            for p in property:
+                                c2pProperties[p] = 'UNKNOWN'
+                        else:
+                            c2pProperties[property] = 'UNKNOWN'
+
+        # Normally, every property should have both a componentToProperty and propertyToComponent method
+
+        # Log any properties included in propertyToComponent methods that do not show up in a componentToProperty method
+        for p in { k: p2cProperties[k] for k in p2cProperties if k not in c2pProperties }:
+            self._logger.warn('No componentToProperty method found for {0}'.format(p))
+
+        # Log any properties included in componentToProperty methods that do not show up in a propertyToComponent method
+        for p in { k: c2pProperties[k] for k in c2pProperties if k not in p2cProperties }:
+            self._logger.warn('No propertyToComponent method found for {0}'.format(p))
+
+        # Combine lists
+        self.properties = p2cProperties
+        for p in c2pProperties:
+            self.properties[p] = c2pProperties[p]
 
     def _readLoop(self):
         ''' Main event loop for reading from component '''
