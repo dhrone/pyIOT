@@ -8,7 +8,7 @@ import queue
 import time
 
 class Component(object):
-    ''' Components are responsible for monitoring the underlying physical component, updating dependent properties associated with the component, and responding to updates of those properties by sending the appropriate commands to the component to get it to update its status to be consistent with its published properites
+    ''' Components are responsible for monitoring the underlying physical component, updating dependent properties associated with the component, and responding to updates of those properties by sending the appropriate commands to the component to get it to update its status to be consistent with its published properties
 
     Args:
         name (str): The name of the component
@@ -283,6 +283,7 @@ class Component(object):
                     time.sleep(5)
                     raise queue.Empty
 
+                print ('Checking component queue')
                 message = self._componentQueue.get(block=True, timeout=5)
                 self._componentQueue.task_done()
 
@@ -309,6 +310,7 @@ class Component(object):
                         self._logger.warn('{0} has no property that matches {1}'.format(self.__name__,message['property']))
 
             except queue.Empty:
+                print ('Component queue was empty')
                 # If nothing waiting to be written or the component is not ready, send a query to get current component status
                 qs = self.queryStatus()
                 if qs:
@@ -364,10 +366,13 @@ class Component(object):
     ''' Customize IO functionality by overriding these methods '''
     def read(self):
         ''' Override this method if your component does not support a standard stream for input/output '''
-        return self._read(self._eol, self._timeout)
+        v = self._read(self._eol, self._timeout)
+        print ('READ ', v)
+        return v
 
     def write(self,value):
         ''' Override this method if your component does not support a standard stream for input/output'''
+        print ('WRITE ', value)
         return self._write(value, self._eol, self._timeout, self._synchronous)
 
     def close(self):
