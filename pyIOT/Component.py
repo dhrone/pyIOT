@@ -13,7 +13,6 @@ class Component(object):
     Args:
         name (str): The name of the component
         stream (:obj:`IOBase`): A stream object that receives and can send data to the physical device
-        properties (dict): A dictionary composed of the properties the component manages and their initial values
         eol (str, optional): The substring that represents end of command within the stream for the component.  Default is newline (e.g. `\\n`)
         timeout (float, optional): The time in seconds to wait for input from the device before the read attempt times out.  Default is 5 seconds.
         synchronous (bool, optional): Determines how reading and writing are handled.  Synchronous devices only respond when written to.  Default is False (e.g. asynchronous)
@@ -50,12 +49,12 @@ class Component(object):
 
         # Starting event loops
         _threadWrite = Thread(target=self._writeLoop)
-        _threadWrite._start()
+        _threadWrite.start()
 
         # If component is asynchronous, start an independent read thread
         if not self._synchronous:
             _threadRead = Thread(target=self._readLoop)
-            _threadRead._start()
+            _threadRead.start()
 
     def updateComponent(self, property, value):
         ''' This method is normally called by the Thing that contains the component to tell the component to update its status.  It can also be called by other processes that need to tell the component to update itself
@@ -209,7 +208,7 @@ class Component(object):
         for supercls in cls.__mro__:  # This makes inherited Appliances work
             for method in supercls.__dict__.values():
                 p2cList = getattr(method, '__propertyToComponent__', {})
-                if p2cList and property in p2dList:
+                if p2cList and property in p2cList:
                     return p2cList.get(property)
 
     def _initializeProperties(self):

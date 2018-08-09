@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from threading import Lock, Thread
-import serial
 import logging
 import json
 import re
@@ -26,7 +25,7 @@ class Thing(object):
 
     def __init__(self, endpoint=None, thingName=None, rootCAPath=None, certificatePath=None, privateKeyPath=None, region=None, components=None):
         ''' Initialize connection to AWS IOT shadow service '''
-        
+
         self._eventQueue = queue.Queue()
         self._localShadow = dict() # dictionary of local property values
         self._propertyHandlers = dict() # dictionary to set which component handles which property values

@@ -1,5 +1,6 @@
 from pyIOT import Thing, Component
 
+import logging
 import serial
 
 class preampComponent(Component):
@@ -75,6 +76,7 @@ class preampComponent(Component):
 
     def queryStatus(self):
         ''' The Anthem only allows you to query its status when it is on.  When it is off you can only ask for power state '''
+        print ('queryStatus', self.properties)
         if self.properties['powerState'] == 'ON':
             return 'P1?\n'
         else:
@@ -99,10 +101,10 @@ class preampComponent(Component):
         ''' Get volume from volArray and round to nearest 0.5db '''
         return int(5*round(float(_volArray[v])/5*10))/10
 
-    @staticmethod
-    def _db(db):
+    @classmethod
+    def _db(cls, db):
         ''' Find the closest db value from volArray and return corresponding volume value '''
-        ar = self._volArray
+        ar = cls._volArray
         s = 0
         e = len(ar)-1
         cp = int(e/2)
@@ -338,8 +340,10 @@ if __name__ == u'__main__':
 
     try:
         preamp = preampComponent('/dev/ttyUSB0',9600)
+        projector = projectorComponent('/dev/ttyUSB1', 9600)
 
-        condoTV = condoTVThing(endpoint='aamloz0nbas89.iot.us-east-1.amazonaws.com', thingName='condoTV', rootCAPath='root-CA.crt', certificatePath='condoTV.crt', privateKeyPath='condoTV.private.key', region='us-east-1', components=[condoAVM])
-        condoTV.start()
+        TV = TVThing(endpoint='aamloz0nbas89.iot.us-east-1.amazonaws.com', thingName='TV', rootCAPath='root-CA.crt', certificatePath='TV.crt', privateKeyPath='TV.private.key', region='us-east-1', components=[preamp, projector])
+        TV.start()
     except KeyboardInterrupt:
-        condoAVM.exit()
+        preamp.exit()
+        projector.exit()
