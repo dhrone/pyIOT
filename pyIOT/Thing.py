@@ -31,9 +31,9 @@ class Thing(object):
         self._propertyHandlers = dict() # dictionary to set which component handles which property values
         self._shadowHandler = self._iotConnect(endpoint, thingName, rootCAPath, certificatePath, privateKeyPath, region)
 
-        components = components if type(components) is list else [ components ] # Convert components to a list of a single component has been provided
-        if components is not None:
-            for d in components:
+        self._components = components if type(components) is list else [ components ] # Convert components to a list of a single component has been provided
+        if self._components is not None:
+            for d in self._components:
                 self._registerComponent(d)
 
     def _iotConnect(self, endpoint, thingName, rootCAPath, certificatePath, privateKeyPath, region):
@@ -71,7 +71,7 @@ class Thing(object):
                 self._logger.warn('{0} is trying to register {1} which is a property that is already in use.'.format(component.__name__, property))
             self._localShadow[property] = component.properties[property]
             self._propertyHandlers[property] = component
-        component.start(self._eventQueue)
+        component._start(self._eventQueue)
 
     def _deleteCallback(self, payload, responseStatus, token):
         ''' Log result when a request to delete the IOT shadow has been made '''
@@ -116,19 +116,19 @@ class Thing(object):
             updatedProperties (`dict`): A dictionary of property values that have just changed
 
         Returns:
-            A `list` of `tuples` consisting of the propertyName and the value it has been changed to by the onChange method (e.g. [('powerState', 'ON')])
+            A dictionary consisting property:values changed by the onChange method (e.g. {'powerState', 'ON'})
 
         Example:
 
         .. code-block:: python
 
             def onChange(self, updatedProperties):
-                rv = []
+                rv = {}
                 # Make sure component is always on and set to the CD input when not watching TV
                 if updatedProperties.get('powerState') == 'OFF':
                     print ('Returning powerState to ON and input to CD')
-                    rv.append(('powerState','ON'))
-                    rv.append(('input', 'CD'))
+                    rv['powerState'] = 'ON'
+                    rv['input'] = 'CD'
                 return rv
 
         Note that you can update all property values. This allows you to handle the situation where one IOT property impacts the state of multiple components
@@ -169,8 +169,11 @@ class Thing(object):
 
                         localPropertyChanges = self.onChange(updatedProperties)
                         if localPropertyChanges:
-                            for k, v in localPropertyChanges:
-                                self._propertyHandlers[k].updateComponent(k,v)
+                            for k, v in localPropertyChanges.items():
+                                try:
+                                    self._propertyHandlers[k].updateComponent(k,v)
+                                except KeyError:
+                                    self._logger.warn('onChange requested change for {0} which is not handled by any component'.format(k))
 
             ''' If there are properties to report to the IOT service, send an update message '''
             updateNeeded = False

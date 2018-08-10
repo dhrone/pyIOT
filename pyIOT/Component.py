@@ -8,7 +8,7 @@ import queue
 import time
 
 class Component(object):
-    ''' Components are responsible for monitoring the underlying physical component, updating dependent properties associated with the component, and responding to updates of those properties by sending the appropriate commands to the component to get it to update its status to be consistent with its published properites
+    ''' Components are responsible for monitoring the underlying physical component, updating dependent properties associated with the component, and responding to updates of those properties by sending the appropriate commands to the component to get it to update its status to be consistent with its published properties
 
     Args:
         name (str): The name of the component
@@ -77,6 +77,7 @@ class Component(object):
         ''' Shut down component driver '''
         self._exit = True
         self._componentQueue.put({'action': 'EXIT'})
+        self._eventQueue.put({'source': self.__name__, 'action': 'EXIT'})
 
     @classmethod
     def componentToProperty(cls, property, regex):
@@ -221,14 +222,14 @@ class Component(object):
                 p2cList = getattr(method, '__propertyToComponent__', {})
                 if p2cList:
                     for k in p2cList:
-                        p2cProperties[k] = 'UNKNOWN'
+                        p2cProperties[k] = None
                 if c2pList:
                     for cre, (property, method) in c2pList.items():
                         if type(property) is list:
                             for p in property:
-                                c2pProperties[p] = 'UNKNOWN'
+                                c2pProperties[p] = None
                         else:
-                            c2pProperties[property] = 'UNKNOWN'
+                            c2pProperties[property] = None
 
         # Normally, every property should have both a componentToProperty and propertyToComponent method
 
@@ -253,6 +254,8 @@ class Component(object):
             if val:
                 #print ('{0}:[{1}]'.format(self.__name__, val.replace('\r','\\r')))
                 self._processComponentResponse(val)
+        print ('Exiting {0} readLoop'.format(self.__name__))
+
 
     def _processComponentResponse(self, val):
         ret = self._componentToProperty(val) # Retrieve appropriate handler to translate component value into property value
@@ -283,6 +286,7 @@ class Component(object):
                     time.sleep(5)
                     raise queue.Empty
 
+                print ('Checking component queue')
                 message = self._componentQueue.get(block=True, timeout=5)
                 self._componentQueue.task_done()
 
@@ -309,6 +313,7 @@ class Component(object):
                         self._logger.warn('{0} has no property that matches {1}'.format(self.__name__,message['property']))
 
             except queue.Empty:
+                print ('Component queue was empty')
                 # If nothing waiting to be written or the component is not ready, send a query to get current component status
                 qs = self.queryStatus()
                 if qs:
@@ -320,6 +325,7 @@ class Component(object):
                             self._processComponentResponse(val)
 
                 continue
+        print ('Exiting {0} writeLoop'.format(self.__name__))
 
     def _read(self, eol=b'\n', timeout=5):
         eol = eol.encode() if type(eol) is str else eol
@@ -364,10 +370,13 @@ class Component(object):
     ''' Customize IO functionality by overriding these methods '''
     def read(self):
         ''' Override this method if your component does not support a standard stream for input/output '''
-        return self._read(self._eol, self._timeout)
+        v = self._read(self._eol, self._timeout)
+        self._logger.debug('COMPONENT {0} READING [{1}]'.format(self.__name__, v))
+        return v
 
     def write(self,value):
         ''' Override this method if your component does not support a standard stream for input/output'''
+        self._logger.debug('COMPONENT {0} WRITING {1}'.format(self.__name__, value))
         return self._write(value, self._eol, self._timeout, self._synchronous)
 
     def close(self):
