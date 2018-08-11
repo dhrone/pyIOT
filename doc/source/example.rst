@@ -339,12 +339,12 @@ TVThing source code
                     rv['inputProjector'] = 'HDMI2'
             return rv
 
-Writing __main__
+Writing MAIN
 ----------------
 
 To finish the program, you need to create object instances for all of your components, pass these to your Thing and tell it to start.
 
-__main__ source code
+MAIN source code
 ~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
@@ -369,3 +369,8 @@ __main__ source code
             ''' Shut down components.  This will also cause the Thing to shut down '''
             preamp.exit()
             projector.exit()
+
+SOURCE
+======
+
+The complete source for the example can be found at https://github.com/dhrone/pyIOT/blob/master/tests/example.py.

@@ -126,7 +126,7 @@ class Component(object):
                 @Component.componentToProperty(['input', 'volume', 'muted'], '^P1S([0-9])V([+-][0-9]{2}[\\.][0-9])M([01])D[0-9]E[0-9]$')
                 def avmcombinedResponse(self, property, value):
                     if property == 'input':
-                        val = { '0': 'CD', '3': 'TAPE', '5': 'DVD', '6': 'TV', '7': 'SAT', '8': 'VCR', '9': 'AUX' }.get(value)
+                        val = { '0': 'CD', '1': '2-Ch', '2': '6-Ch', '3': 'TAPE', '4':'RADIO', '5': 'DVD', '6': 'TV', '7': 'SAT', '8': 'VCR', '9': 'AUX' }.get(value)
                         if val:
                             return val
                         raise ValueError('{0} is invalid for property {1}'.format(value, property))

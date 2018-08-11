@@ -14,15 +14,13 @@ pyIOT
 
 pyIOT enables rapid integration of a device with the Amazon AWS IOT-Core service.
 
-.. image:: _static/pyIOT_Start.jpg
+.. image:: _static/pyIOT_System.jpg
 
 .. automodule:: pyIOT
 
 
 User Guide
 ==========
-
-This is where the user guide stuff will go.
 
 .. toctree::
   :maxdepth: 2
@@ -31,8 +29,6 @@ This is where the user guide stuff will go.
 
 Example Project
 ===============
-
-This is where the example project using the Epson and AVM components will go
 
 .. toctree::
   :maxdepth: 2
