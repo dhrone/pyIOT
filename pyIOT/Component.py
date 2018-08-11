@@ -293,6 +293,7 @@ class Component(object):
                     raise queue.Empty
 
                 if self._needQuery:
+                    self._needQuery = False
                     raise queue.Empty
 
                 message = self._componentQueue.get(block=True, timeout=self._queryTiming)
@@ -338,7 +339,8 @@ class Component(object):
         eol = eol.encode() if type(eol) is str else eol
         with self._readlock:
             retval = self._readresponse(eol, timeout)
-        self._logger.debug('COMPONENT {0} READING [{1}]'.format(self.__name__, retval))
+        if retval:
+            self._logger.debug('COMPONENT {0} READING [{1}]'.format(self.__name__, retval))
         return retval
 
     def _readresponse(self, eol=b'\n', timeout=2):
@@ -358,7 +360,7 @@ class Component(object):
         return retval.decode()
 
     def _write(self, value, eol=b'\n', timeout=2, synchronous=False):
-        self._logger.debug('COMPONENT {0} WRITING {1}'.format(self.__name__, value))
+        self._logger.debug('COMPONENT {0} WRITING {1}'.format(self.__name__, value.strip(self._eol)))
         value = value.encode() if type(value) is str else value
         eol = eol.encode() if type(eol) is str else eol
 

@@ -28,7 +28,7 @@ class Thing(object):
         self._eventQueue = queue.Queue()
         self._localShadow = dict() # dictionary of local property values
         self._propertyHandlers = dict() # dictionary to set which component handles which property values
-        self._shadowHandler = self._iotConnect(endpoint, thingName, rootCAPath, certificatePath, privateKeyPath, region)
+        self._iotConnect(endpoint, thingName, rootCAPath, certificatePath, privateKeyPath, region)
 
         self._components = components if type(components) is list else [ components ] # Convert components to a list of a single component has been provided
         if self._components is not None:
@@ -60,7 +60,12 @@ class Thing(object):
         # Listen on deltas
         deviceShadowHandler.shadowRegisterDeltaCallback(self._deltaCallback)
 
-        return deviceShadowHandler
+        self._shadowClient = _myAWSIoTMQTTShadowClient
+        self._shadowHandler = deviceShadowHandler
+
+    def _iotDisconnect(self):
+        self._shadowHandler.shadowUnregisterDeltaCallback()
+        self._shadowClient.disconnect()
 
     def _registerComponent(self, component):
         ''' Register a component as the handler for the set of properties that the component implements '''
@@ -145,6 +150,8 @@ class Thing(object):
             for message in messages:
                 if message['action'] == 'EXIT':
                     ''' If an EXIT message is received then stop processing messages and exit the main thing loop '''
+                    self._logger.info("THING {0} is exiting".format(self.__name__))
+                    self._iotDisconnect()
                     return
 
                 if message['action'] == 'UPDATE':
@@ -161,7 +168,7 @@ class Thing(object):
                                 try:
                                     self._propertyHandlers[k].updateComponent(k,v)
                                 except KeyError:
-                                    self._logger.warn("THING {0}'s onChange method requested a change for {1} which is not handled by any component".format(self.__name.__,k))
+                                    self._logger.warn("THING {0}'s onChange method requested a change for {1} which is not handled by any component".format(self.__name__,k))
 
             ''' If there are properties to report to the IOT service, send an update message '''
             updateNeeded = False

@@ -41,31 +41,32 @@ def ptThing(request):
     return Thing
 
 @pytest.fixture
-def ptIOT(request):
+def ptIOT(request, scope="session"):
     client = boto3.client('iot-data', region_name=REGION)
     return client
 
-def testIOTvalue(ptIOT, section, valuedict):
+def IOTvalue(ptIOT, section, valuedict):
     thingData = json.loads(ptIOT.get_thing_shadow(thingName=THINGNAME)['payload'].read().decode('utf-8'))
 
     for k in valuedict:
         assert (valuedict[k] == thingData['state'][section].get(k))
 
 def test_Thing_startup(ptThing, ptIOT):
-    time.sleep(15)
+    time.sleep(8)
     preamp = ptThing._components[0]
     preamp.exit()
+    IOTvalue(ptIOT, 'reported', { 'powerState': 'ON' })
+    time.sleep(2)
 
-    testIOTvalue(ptIOT, 'reported', { 'powerState': 'ON' })
 
 def test_Thing_frontPanel(ptThing, ptIOT):
-    time.sleep(15)
+    time.sleep(8)
     preamp = ptThing._components[0]
     preamp._stream.frontPanel('input', 'TV')
     time.sleep(2)
     preamp.exit()
 
-    testIOTvalue(ptIOT, 'reported',
+    IOTvalue(ptIOT, 'reported',
         {
             'powerState': 'ON',
             'input': 'TV',
@@ -75,9 +76,8 @@ def test_Thing_frontPanel(ptThing, ptIOT):
     )
 
 def test_Thing_fromIOT(ptThing, ptIOT):
-    time.sleep(15)
+    time.sleep(8)
     preamp = ptThing._components[0]
-    ptIOT.
     item = {'state': {'desired': {'input': 'RADIO'}}}
     bdata = json.dumps(item).encode('utf-8')
     response = ptIOT.update_thing_shadow(thingName=THINGNAME, payload = bdata)

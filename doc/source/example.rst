@@ -111,7 +111,7 @@ A quick reminder of the required activities.
         # convert anthem input message into input property
         @Component.componentToProperty('input', '^P1S([0-9])$')
         def avmToInput(self, property, value):
-            val = { '0': 'CD', '3': 'TAPE', '5': 'DVD', '6': 'TV', '7': 'SAT', '8': 'VCR', '9': 'AUX' }.get(value)
+            val = { '0': 'CD', '1': '2-Ch', '2': '6-Ch', '3': 'TAPE', '4':'RADIO', '5': 'DVD', '6': 'TV', '7': 'SAT', '8': 'VCR', '9': 'AUX' }.get(value)
             if val: return val
             raise ValueError('{0} is not a valid value for property {1}'.format(value, property))
 
@@ -135,7 +135,6 @@ A quick reminder of the required activities.
         # Note that we are passing it a list of properties and that the regex has multiple match groups
         @Component.componentToProperty(['input', 'volume', 'muted'], '^P1S([0-9])V([+-][0-9]{1,2}[\\.][0-9])M([0-1])D[0-9]E[0-9]$')
         def avmcombinedResponse(self, property, value):
-            self._logger.debug('COMPONENT {0} avmcombinedResponse {1}:{2}'.format(self.__name__, property, value))
             return { 'input': self.avmToInput, 'volume': self.avmToVolume, 'muted': self.avmToMuted }.get(property)(property, value)
 
         ''' PROPERTY TO COMPONENT METHODS '''
@@ -150,7 +149,7 @@ A quick reminder of the required activities.
         # Command preamp to change input
         @Component.propertyToComponent('input', 'P1S{0}\n')
         def inputToAVM(self, value):
-            val = { 'CD': '0', 'TAPE': '3', 'DVD': '5', 'TV': '6', 'SAT': '7', 'VCR': '8', 'AUX': '9' }.get(value)
+            val = { 'CD': '0', '2-Ch': '1', '6-Ch': '2', 'TAPE': '3', 'RADIO': '4', 'DVD': '5', 'TV': '6', 'SAT': '7', 'VCR': '8', 'AUX': '9' }.get(value)
             if val: return val
             raise ValueError('{0} is not a valid input'.format(value))
 
@@ -353,8 +352,6 @@ __main__ source code
     if __name__ == u'__main__':
 
         try:
-            name = None, stream = None, eol='\n', timeout=2.0, queryTiming=5.0, synchronous=False
-
             ''' Connected to serial interfaces for preamp and projector '''
             preampStream = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
             projectorStream = serial.Serial('/dev/ttyUSB1', 9600, timeout=1)
