@@ -53,14 +53,11 @@ class simulator(object):
     def computeResponse(self):
         ''' Overload this to implement the device you are simulating '''
         with self._rwlock:
+            ''' Default behavior is to echo what is received '''
             self._data += self._receivedData
             self._receivedData = b''
 
-    def __str__( self ):
-        return  ('Simulating '+self.__name__ )
-
 class preampSim(simulator):
-
 
     def __init__(self, name='preampSim', data=b'', eol=b'\n'):
         super(preampSim, self).__init__(name, data, eol)

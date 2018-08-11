@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 from threading import Lock, Thread
-import serial
 import logging
-import json
 import re
 import queue
 import time
@@ -14,29 +12,36 @@ class Component(object):
         name (str): The name of the component
         stream (:obj:`IOBase`): A stream object that receives and can send data to the physical device
         eol (str, optional): The substring that represents end of command within the stream for the component.  Default is newline (e.g. `\\n`)
-        timeout (float, optional): The time in seconds to wait for input from the device before the read attempt times out.  Default is 5 seconds.
+        timeout (float, optional): The time in seconds to wait for input from the device before the read attempt times out.  Default is 2 seconds.
+        queryTiming (float, optional): Sets how often in seconds a query for current status will be sent.  Default is 5 seconds.
         synchronous (bool, optional): Determines how reading and writing are handled.  Synchronous devices only respond when written to.  Default is False (e.g. asynchronous)
 
     '''
     _logger = logging.getLogger(__name__)
 
-    def __init__(self, name = None, stream = None, eol='\n', timeout=5, synchronous=False):
+    def __init__(self, name = None, stream = None, eol='\n', timeout=2.0, queryTiming=5.0, synchronous=False):
         ''' Initialize component driver and set it to receive updates from the Thing '''
 
         self._stream = stream
         self._eol = eol
         self._timeout = timeout
+        self._queryTiming = queryTiming
         self._synchronous = synchronous
         self.__name__ = name if name is not None else self.__class__.__name__
         self._componentQueue = queue.Queue()
         self._readlock = Lock()
         self._waitFor = None # Are we waiting for a specific value from the component
         self._exit = False # Set when a request has been made to exit the component driver
+        self._needQuery = True
 
         self._initializeProperties() # Determine what properties are being handled
 
     def __del__(self):
         self._close()
+
+    def requestStatus(self):
+        ''' Request that component query the device to get its current status.  This normally happens automatically but can be commanded to occur using this method '''
+        self._needQuery = True
 
     def _start(self, eventQueue):
         ''' Start the threads that will read and write data to the device.  If the device is asynchronous two threads will be started.  If synchronous only the write thread will be used.
@@ -49,11 +54,13 @@ class Component(object):
 
         # Starting event loops
         _threadWrite = Thread(target=self._writeLoop)
+        _threadWrite.daemon = True
         _threadWrite.start()
 
         # If component is asynchronous, start an independent read thread
         if not self._synchronous:
             _threadRead = Thread(target=self._readLoop)
+            _threadRead.daemon = True
             _threadRead.start()
 
     def updateComponent(self, property, value):
@@ -67,8 +74,10 @@ class Component(object):
         self._componentQueue.put({'source': '__thing__', 'action': 'UPDATE', 'property': property, 'value': value })
 
     def _updateThing(self, property, value):
-        ''' Send message to thing telling it to update its thing shadow to reflect the component's reported state '''
+        ''' Send message to thing telling it to update its properties to reflect the component's reported state '''
         self._eventQueue.put({'source': self.__name__, 'action': 'UPDATE', 'property': property, 'value': value })
+
+        self._logger.info('COMPONENT {0} property change [{1}:{2}]'.format(self.__name__, property, value))
 
         # update local property value
         self.properties[property] = value
@@ -106,9 +115,9 @@ class Component(object):
                     retval =  { '1': 'ON', '0': 'OFF' }.get(value)
                     if retval:
                         return retval
-                    raise ValueError('{0} INVALID {1} VALUE'.format(value, property))
+                    raise ValueError('{0} is invalid for property {1}'.format(value, property))
 
-            In this example our AVM processor sends `P1P1` or `P1P0` depending on whether the AVM processor is on or off.  We have decided that the IOT property name we will use to record whether the AVM processor is on or off will be called 'powerState'.  Two things are worth noticing about the supplied regex.  First, the regex begins with the ^ symbol and ends with the $ symbol.  This forces the match to begin at the start of the response and end at the very end of the response.  This is the safest way to handle a match.  Second, the parenthesis surrounding the `[01]` term.  The parens designate that the term inside is a match group.  It is this term that controls what value the decorated function should expect to receive.  In this case it will be either a '1' or a '0'.
+            In this example our AVM processor sends `P1P1` or `P1P0` depending on whether the AVM processor is on or off.  We have decided that the IOT property name we will use to record whether the AVM processor is on or off will be called 'powerState'.  Two things are worth noticing about the supplied regex.  First, the regex begins with the ^ symbol and ends with the $ symbol.  This forces the match to begin at the start of the response and end at the very end of the response.  This is the safest way to handle a match.  Second, the parenthesis surrounding the `[01]` term designate that the term inside is a match group.  It is this term that controls what value the decorated function should expect to receive.  In this case it will be either a '1' or a '0'.
 
             2nd example:
 
@@ -120,24 +129,17 @@ class Component(object):
                         val = { '0': 'CD', '3': 'TAPE', '5': 'DVD', '6': 'TV', '7': 'SAT', '8': 'VCR', '9': 'AUX' }.get(value)
                         if val:
                             return val
-                        raise ValueError('{0} is not a valid value for property {1}'.format(value, property))
+                        raise ValueError('{0} is invalid for property {1}'.format(value, property))
                     elif property == 'volume':
                         try:
-                            rawvol = float(value)
+                            return self._dbToVolume(float(rawvol))
                         except:
-                            raise ValueError('{0} is not a valid value for property {1}'.format(value, property))
-                        volarray = [-50, -35, -25, -21, -18, -12, -8, -4, 0, 5, 10 ]
-                        for i in range(len(volarray)):
-                            if rawvol <= volarray[i]:
-                                return i*10
-                        else:
-                            # volume greater than max array value
-                            return 100
+                            raise ValueError('{0} is invalid for property {1}'.format(value, property))
                     elif property == 'muted':
                         val = { '1': True, '0': False }.get(value)
                         if val is not None:
                             return val
-                        raise ValueError('{0} is not a valid value for property {1}'.format(value, property))
+                        raise ValueError('{0} is invalid for property {1}'.format(value, property))
                     else:
                         raise TypeError('ERR: {0} INVALID {1} VALUE'.format(value, property))
 
@@ -235,11 +237,11 @@ class Component(object):
 
         # Log any properties included in propertyToComponent methods that do not show up in a componentToProperty method
         for p in { k: p2cProperties[k] for k in p2cProperties if k not in c2pProperties }:
-            self._logger.warn('No componentToProperty method found for {0}'.format(p))
+            self._logger.warn('COMPONENT {0} has no componentToProperty method for {1}'.format(self.__name__, p))
 
         # Log any properties included in componentToProperty methods that do not show up in a propertyToComponent method
         for p in { k: c2pProperties[k] for k in c2pProperties if k not in p2cProperties }:
-            self._logger.warn('No propertyToComponent method found for {0}'.format(p))
+            self._logger.warn('COMPONENT {0} has no propertyToComponent method for {1}'.format(self.__name__, p))
 
         # Combine lists
         self.properties = p2cProperties
@@ -248,13 +250,12 @@ class Component(object):
 
     def _readLoop(self):
         ''' Main event loop for reading from component '''
-        print ('Starting {0} readLoop'.format(self.__name__))
+        self._logger.info('COMPONENT {0} Starting readLoop'.format(self.__name__))
         while not self._exit:
-            val = self.read()
+            val = self._read()
             if val:
-                #print ('{0}:[{1}]'.format(self.__name__, val.replace('\r','\\r')))
                 self._processComponentResponse(val)
-        print ('Exiting {0} readLoop'.format(self.__name__))
+        self._logger.info('COMPONENT {0} Exiting readLoop'.format(self.__name__))
 
 
     def _processComponentResponse(self, val):
@@ -272,68 +273,75 @@ class Component(object):
                         # Send updated property to Thing
                         self._updateThing(property[i], xval)
                 except (ValueError, AssertionError, TypeError) as e:
-                    self._logger.warn('Unable to process component response.  Error: {0}'.format(e))
+                    self._logger.warn("COMPONENT {0}'s' attempt to process response to {1} failed.  Error: {2}".format(self.__name__, val, e))
+        else:
+            self._logger.debug('COMPONENT {0} has no componentToProperty method that matches input [{1}]'.format(self.__name__, val))
 
     def _writeLoop(self):
         ''' Main event loop for writing to component '''
-        print ('Starting {0} writeLoop'.format(self.__name__))
+        self._logger.info('COMPONENT {0} Starting writeLoop'.format(self.__name__))
 
         while not self._exit:
             try:
+
                 # Wait for ready state to be reached
-                while not self.ready():
-                    print ('{0} Sleeping ...'.format(self.__name__))
-                    time.sleep(5)
+                while True:
+                    s = self.ready()
+                    if not s: break
+                    self._logger.debug('COMPONENT {0} waiting for device to be ready.  Sleeping {1} seconds...'.format(self.__name__, s))
+                    time.sleep(s)
                     raise queue.Empty
 
-                print ('Checking component queue')
-                message = self._componentQueue.get(block=True, timeout=5)
+                if self._needQuery:
+                    raise queue.Empty
+
+                message = self._componentQueue.get(block=True, timeout=self._queryTiming)
                 self._componentQueue.task_done()
 
                 if message['action'].upper() == 'EXIT':
-                    return
+                    break
                 elif message['action'].upper() == 'UPDATE':
-                    print ('IOT requests [{0}:{1}]'.format(message['property'], message['value']))
+                    self._logger.info('COMPONENT {0} received request [{1}:{2}]'.format(self.__name__,message['property'], message['value']))
                     ret = self._propertyToComponent(message['property'])
                     if ret:
                         (cmd, method) = ret
 
                         # Send updated property to component
                         try:
-                            val = self.write(cmd.format(method(self,message['value'])))
+                            val = self._write(cmd.format(method(self,message['value'])))
                         except (ValueError, TypeError, AssertionError) as e:
                             val = None
-                            print ('{0}. Component state unchanged'.format(e))
+                            self._logger.warn('COMPONENT {0} request failed: {1}'.format(self.__name__,e))
 
                         # If component is synchronous, it likely returned a response from the command we just sent
                         if val:
                             # If so, process it
                             self._processComponentResponse(val)
                     else:
-                        self._logger.warn('{0} has no property that matches {1}'.format(self.__name__,message['property']))
+                        self._logger.warn('COMPONENT {0} has no method to handle property {1}'.format(self.__name__,message['property']))
 
             except queue.Empty:
-                print ('Component queue was empty')
                 # If nothing waiting to be written or the component is not ready, send a query to get current component status
                 qs = self.queryStatus()
                 if qs:
                     # Get the query to send.  If the query is a list, process each query individually
                     qs = qs if type(qs) is list else [ qs ]
                     for q in qs:
-                        val = self.write(q)
+                        val = self._write(q)
                         if val:
                             self._processComponentResponse(val)
 
                 continue
-        print ('Exiting {0} writeLoop'.format(self.__name__))
+        self._logger.info('COMPONENT {0} Exiting writeLoop'.format(self.__name__))
 
-    def _read(self, eol=b'\n', timeout=5):
+    def _read(self, eol=b'\n', timeout=2):
         eol = eol.encode() if type(eol) is str else eol
         with self._readlock:
             retval = self._readresponse(eol, timeout)
+        self._logger.debug('COMPONENT {0} READING [{1}]'.format(self.__name__, retval))
         return retval
 
-    def _readresponse(self, eol=b'\n', timeout=5):
+    def _readresponse(self, eol=b'\n', timeout=2):
         last_activity = time.time()
         buffer = b''
         while True:
@@ -349,7 +357,8 @@ class Component(object):
                 break
         return retval.decode()
 
-    def _write(self, value, eol=b'\n', timeout=5, synchronous=False):
+    def _write(self, value, eol=b'\n', timeout=2, synchronous=False):
+        self._logger.debug('COMPONENT {0} WRITING {1}'.format(self.__name__, value))
         value = value.encode() if type(value) is str else value
         eol = eol.encode() if type(eol) is str else eol
 
@@ -367,32 +376,16 @@ class Component(object):
     def _close(self):
         self._stream.close()
 
-    ''' Customize IO functionality by overriding these methods '''
-    def read(self):
-        ''' Override this method if your component does not support a standard stream for input/output '''
-        v = self._read(self._eol, self._timeout)
-        self._logger.debug('COMPONENT {0} READING [{1}]'.format(self.__name__, v))
-        return v
-
-    def write(self,value):
-        ''' Override this method if your component does not support a standard stream for input/output'''
-        self._logger.debug('COMPONENT {0} WRITING {1}'.format(self.__name__, value))
-        return self._write(value, self._eol, self._timeout, self._synchronous)
-
-    def close(self):
-        ''' Override this method if your component does not support a standard stream for input/output '''
-        self._close()
-
     def ready(self):
         ''' Override this method if your component occasionally stops responding during a state change such as power on/off
 
         Returns:
-            `True` if device can receive new commands
+            `False` if device can receive new commands
 
-            `False` if device is busy and ignoring input
+            `seconds (int)` to sleep if device is busy
 
         '''
-        return True
+        return False
 
     def queryStatus(self):
         ''' Override this function if you want to periodically query your component for status.  You can check the component state (such as power status) to determine what query to send.  The response can be either a string or a list of strings.  If you return a list, each list item will be sent to the component individually including gathering and handling any response the query generates.

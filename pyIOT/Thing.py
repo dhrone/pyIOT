@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-from threading import Lock, Thread
 import logging
 import json
-import re
 import queue
 import time
 
@@ -26,6 +24,7 @@ class Thing(object):
     def __init__(self, endpoint=None, thingName=None, rootCAPath=None, certificatePath=None, privateKeyPath=None, region=None, components=None):
         ''' Initialize connection to AWS IOT shadow service '''
 
+        self.__name__ = thingName
         self._eventQueue = queue.Queue()
         self._localShadow = dict() # dictionary of local property values
         self._propertyHandlers = dict() # dictionary to set which component handles which property values
@@ -68,7 +67,7 @@ class Thing(object):
 
         for property in component.properties:
             if property in self._localShadow:
-                self._logger.warn('{0} is trying to register {1} which is a property that is already in use.'.format(component.__name__, property))
+                self._logger.warn("THING {0}'s component {1} is trying to register {2} which is a property that is already in use.".format(self.__name__, component.__name__, property))
             self._localShadow[property] = component.properties[property]
             self._propertyHandlers[property] = component
         component._start(self._eventQueue)
@@ -76,33 +75,23 @@ class Thing(object):
     def _deleteCallback(self, payload, responseStatus, token):
         ''' Log result when a request to delete the IOT shadow has been made '''
         if responseStatus == 'accepted':
-            self._logger.info("Delete request " + token + " accepted!")
             return
 
-        self._logger.warn({
-            'timeout': "Delete request " + token + " time out!",
-            'rejected': "Delete request " + token + " rejected!"
-        }.get(responseStatus, "Delete request with token " + token + "contained unexpected response status " + responseStatus))
+        self._logger.warn("THING {0}'s request to delete shadow failed.  Reason given: {1}".format(self.__name__, responseStatus))
 
     def _updateCallback(self, payload, responseStatus, token):
         ''' Log result when a request has been made to update the IOT shadow '''
         if responseStatus == 'accepted':
             payloadDict = json.loads(payload)
-            self._logger.info("Received delta request: " + json.dumps(payloadDict))
             return
 
-        self._logger.warn({
-            'timeout': "Update request " + token + " timed out!",
-            'rejected': "Update request " + token + " was rejected!"
-        }.get(responseStatus, "Update request " + token + " contained unexpected response status " + responseStatus))
+        self._logger.warn("THING {0}'s request to update shadow failed.  Reason given: {1}".format(self.__name__, responseStatus))
 
     def _deltaCallback(self, payload, responseStatus, token):
         ''' Receive an delta message from IOT service and forward update requests for every included property to the event queue '''
-        print ('Delta message received with content: {0}'.format(payload))
         payloadDict = json.loads(payload)
 
         for property in payloadDict['state']:
-            self._logger.info('Delta Message: processing item [{0}][{1}]'.format(property, payloadDict['state'][property]))
             self._eventQueue.put({'source': '__thing__', 'action': 'UPDATE', 'property': property, 'value': payloadDict['state'][property] })
 
     def start(self):
@@ -116,7 +105,7 @@ class Thing(object):
             updatedProperties (`dict`): A dictionary of property values that have just changed
 
         Returns:
-            A dictionary consisting property:values changed by the onChange method (e.g. {'powerState', 'ON'})
+            A dictionary consisting of property:values changed by the onChange method (e.g. {'powerState', 'ON'})
 
         Example:
 
@@ -126,7 +115,6 @@ class Thing(object):
                 rv = {}
                 # Make sure component is always on and set to the CD input when not watching TV
                 if updatedProperties.get('powerState') == 'OFF':
-                    print ('Returning powerState to ON and input to CD')
                     rv['powerState'] = 'ON'
                     rv['input'] = 'CD'
                 return rv
@@ -173,14 +161,14 @@ class Thing(object):
                                 try:
                                     self._propertyHandlers[k].updateComponent(k,v)
                                 except KeyError:
-                                    self._logger.warn('onChange requested change for {0} which is not handled by any component'.format(k))
+                                    self._logger.warn("THING {0}'s onChange method requested a change for {1} which is not handled by any component".format(self.__name.__,k))
 
             ''' If there are properties to report to the IOT service, send an update message '''
             updateNeeded = False
             payloadDict = { 'state': { 'reported': {}, 'desired': {} } }
             for property, value in updatedProperties.items():
                 if self._localShadow[property] != value:
-                    print ('IOT UPDATED: [{0}:{1}]'.format(property, value))
+                    self._logger.info('THING {0} updated IOT [{1}:{2}]'.format(self.__name__, property, value))
                     updateNeeded = True
                     payloadDict['state']['reported'] = updatedProperties
                     payloadDict['state']['desired'] = updatedProperties

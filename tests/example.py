@@ -9,7 +9,11 @@ class preampComponent(Component):
     @Component.componentToProperty('powerState', '^P1P([0-1])$')
     def avmToPowerState(self, property, value):
         val = { '1': 'ON', '0': 'OFF' }.get(value)
-        if val: return val
+        if val:
+            if val == 'ON':
+                ''' When the preamp turns on, request an immediate status query '''
+                self.requestStatus()
+            return val
         raise ValueError('{0} is not a valid value for property {1}'.format(value, property))
 
     # convert anthem input message into input property
@@ -24,7 +28,7 @@ class preampComponent(Component):
     def avmToVolume(self, property, value):
         try:
             rawvol = float(value)
-            return self._db(rawvol)
+            return self._dbToVolume(rawvol)
         except:
             raise ValueError('{0} is not a valid value for property {1}'.format(value, property))
 
@@ -61,7 +65,7 @@ class preampComponent(Component):
     # Command preamp to change its volume
     @Component.propertyToComponent('volume', 'P1VM{0}\n')
     def volumeToAVM(self, value):
-        if type(value) is int: return _volume(value)
+        if type(value) is int: return _volumeToDb(value)
         raise ValueError('{0} is not a valid volume'.format(value))
 
     # Command preamp to mute or unmute
@@ -74,8 +78,7 @@ class preampComponent(Component):
     ''' STATUS QUERY METHOD '''
 
     def queryStatus(self):
-        ''' The Anthem only allows you to query its status when it is on.  When it is off you can only ask for power state '''
-        print ('queryStatus', self.properties)
+        ''' The preamp only allows you to query its full status when it is on.  When it is off you can only ask for power state '''
         if self.properties['powerState'] == 'ON':
             return 'P1?\n'
         else:
@@ -96,12 +99,12 @@ class preampComponent(Component):
     del v
 
     @staticmethod
-    def _volume(v):
+    def _volumeToDb(v):
         ''' Get volume from volArray and round to nearest 0.5db '''
         return int(5*round(float(_volArray[v])/5*10))/10
 
     @classmethod
-    def _db(cls, db):
+    def _dbToVolume(cls, db):
         ''' Find the closest db value from volArray and return corresponding volume value '''
         ar = cls._volArray
         s = 0
@@ -133,7 +136,10 @@ class projectorComponent(Component):
     @Component.componentToProperty('projPowerState', '^PWR=([0-9]{2})$')
     def toProjPowerState(self, property, value):
         val = { '00': 'OFF', '01': 'ON', '02': 'WARMING', '03': 'COOLING', '04': 'STANDBY', '05': 'ABNORMAL' }.get(value)
-        if val: return val
+        if val:
+            if val == 'ON':
+                self.requestStatus()
+            return val
         raise ValueError('{0} is not a valid value for property {1}'.format(value, property))
 
     @Component.componentToProperty('projInput', '^SOURCE=([a-zA-Z0-9]{2})$')
@@ -167,7 +173,7 @@ class projectorComponent(Component):
 
     def ready(self):
         ''' Projector stops accepting commands while turning on or off (up to 30 seconds) '''
-        return True if self.properties['projPowerState'] in ['ON', 'OFF', 'UNKNOWN'] else False
+        return False if self.properties['projPowerState'] in ['ON', 'OFF', None] else 5
 
 
 
@@ -177,7 +183,7 @@ class TVThing(Thing):
         rv = {}
         # An Alexa dot is connected to the AUX input.  Make sure preamp is always on and set to the AUX input when not doing something else
         if updatedProperties.get('powerState') == 'OFF':
-            print ('Returning powerState to ON and input to Alexa')
+            self._logger.info('THING {0} has been turned off.  Turning it back ON and setting input to AUX.')
             rv['powerState'] = 'ON'
             rv['input'] = 'AUX'
             rv['powerProjector'] = 'OFF'
@@ -195,14 +201,26 @@ class TVThing(Thing):
                 rv['inputProjector'] = 'HDMI2'
         return rv
 
+
 if __name__ == u'__main__':
 
     try:
-        preamp = preampComponent('/dev/ttyUSB0',9600)
-        projector = projectorComponent('/dev/ttyUSB1', 9600)
+        name = None, stream = None, eol='\n', timeout=2.0, queryTiming=5.0, synchronous=False
 
+        ''' Connected to serial interfaces for preamp and projector '''
+        preampStream = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
+        projectorStream = serial.Serial('/dev/ttyUSB1', 9600, timeout=1)
+
+        ''' instantiate Component classes '''
+        preamp = preampComponent(name='AVM20', stream=preampStream)
+        projector = projectorComponent(name='EPSON1080UB', stream=projectorStream, eol='\r:', synchronous=True)
+
+        ''' instantiate Thing '''
         TV = TVThing(endpoint='aamloz0nbas89.iot.us-east-1.amazonaws.com', thingName='TV', rootCAPath='root-CA.crt', certificatePath='TV.crt', privateKeyPath='TV.private.key', region='us-east-1', components=[preamp, projector])
+
+        ''' Start Thing '''
         TV.start()
     except KeyboardInterrupt:
+        ''' Shut down components.  This will also cause the Thing to shut down '''
         preamp.exit()
         projector.exit()

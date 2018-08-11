@@ -1,7 +1,7 @@
 Overview
 ========
 
-To build an driver for an IOT you first need to decide what components will make up the IOT.  For each of these components you will also need to understand how to interact with the component.  pyIOT is somewhat opinionated in regards to interaction pattern in that the normal communication method it expects for device-to-driver interaction is a stream.  This makes integrating with devices that use a serial or network interface straight forward.  If a component you need to support does not lend itself to stream based communications, it is possible to overload the relevant `Component` methods (read, write, close) to enable whatever communications pattern you need.
+To build an driver for an IOT you first need to decide what components will make up the IOT.  For each of these components you will also need to understand how to interact with the component.  pyIOT is somewhat opinionated in regards to interaction pattern in that the normal communication method it expects for device-to-driver interaction is a stream.  This makes integrating with devices that use a serial or network interface straight forward.  If a component you need to support does not lend itself to stream based communications, you can write your own stream class and use whatever communications style you want.  This stream class must support methods for read, write, and close (see Finishing pyIOT Program for more details).
 
 Prerequisites
 =============
@@ -28,12 +28,16 @@ To complete an pyIOT application you will need to complete the following tasks.
 * Determine what properties your IOT will expose to IOT-Core
 * Write your `Component` classes by inheriting from `Component` and implementing `componentToProperty` and `propertyToComponent` methods for the properties that the component is responsible for
 
-  - You may also want to implement a `queryStatus` method to periodically poll your device for its current property values.
+  - You may need to implement a `queryStatus` method to periodically poll your component for its current property values.
 
     + This is especially useful for synchronous devices
 
+  - You may need to implement a `ready` method to stop pyIOT from sending commands to your component when it is temporarily unable to process messages
+
 * Instantiate each of your component classes
 * Instantiate a Thing to contain your component objects
+
+  - You may need to implement an `onChange` method if you need to cause your Thing to change state based upon other changes occurring within your Thing
 
 A short example
 ---------------
@@ -51,7 +55,7 @@ In this example we will assume the following situation.
 
 * All three of these commands respond with `RELAYON` or `RELAYOFF` to indicate current relay state
 * We have decided that our IOT will be composed only of this relay
-* We have created an IOT within AWS IOT-Core
+* We have created a Thing within AWS IOT-Core
 
   - Its name is `relayOne`
   - It is located in the `us-east-1` region
@@ -89,13 +93,13 @@ In this example we will assume the following situation.
 
   try:
     ser = serial.Serial('/dev/ttyUSB0',9600, timeout=0.5)
-    relayComponent1 = Relay(name = 'RelayComponent1', eol='\n', stream = ser, properties = { 'relayState': 'UNKNOWN' }, synchronous=True)
+    relayComponent = Relay(name = 'RelayComponent1', stream = ser, synchronous=True)
 
     relayThing = Thing(endpoint='<your endpoint>', thingName='relayOne', rootCAPath='root-CA.crt', certificatePath='relayOne.crt',
-      privateKeyPath='relayOne.private.key', region='us-east-1', components=[relayComponent1])
+      privateKeyPath='relayOne.private.key', region='us-east-1', components=relayComponent)
     relayThing.start()
   except KeyboardInterrupt:
-    relayComponent1.exit()
+    relayComponent.exit()
 
 Device Shadow
 =============
@@ -196,7 +200,7 @@ Example multi-property method
       raise ValueError('{0} is too large.  Maximum brightness is 100'.format(val))
 
 
-In this example we are using a lightbulb which sends a message that combines its power state and its brightness setting using the format P#B###.  The P# can be either P0 for power off or P1 for power on.  The B value is a three digit number from 0 to 100.  The regex is set to handle this message format and you should note that as we are supporting two property values (`powerState` and `brightness`) we have two groups within the regex.  You may also notice that the regex will accept values outside the supported brightness value. For this reason, the method verifies that the value is valid before returning it.
+In this example we are using a lightbulb which sends a message that combines its power state and its brightness setting using the format P#B###.  The P# can be either P0 for power off or P1 for power on.  The B value is a one to three digit number from 0 to 100.  The regex is set to handle this message format and you should note that as we are supporting two property values (`powerState` and `brightness`) we have two groups within the regex.  You may also notice that the regex will accept values outside the supported brightness value. For this reason, the method verifies that the value is valid before returning it.
 
 Choosing synchronous vs asynchronous communications
 ---------------------------------------------------
@@ -207,17 +211,48 @@ pyIOT supports both synchronous and asynchronous communications. When running as
 
 If your device supports asynchronous updates you should set synchronous to False when instantiating your Component class.  Otherwise set synchronous to True.
 
+Requesting Component Status
+---------------------------
+
+If your component supports any commands that cause it to return status information, you can get pyIOT to send an appropriate query to your component by implementing a queryStatus method.  If your device responds to different queries based upon its state (often the case with power) you can check the current property values of the component to choose what query command to send.
+
+The `queryStatus` method is called whenever there are no messages from IOT-Core pending and the `queryTiming` value has expired.  You can force a query message to be sent sooner though by calling the `requestStatus` method.
+
+Example:
+
+.. code-block:: python
+
+    def queryStatus(self):
+        ''' The preamp only allows you to query its full status when it is on.  When it is off you can only ask for power state '''
+        if self.properties['powerState'] == 'ON':
+            return 'P1?\n'
+        else:
+            return 'P1P?\n'
+
+In this example, our preamp will only respond to queries about its power status if its power is off.  So we check self.properties['powerState'] before choosing what command to return.  Note: it is possible to send back multiple commands in a single return.  This can be useful if you need to send a series of queries to get the values back from the component needed to understand its complete state.
+
+Example:
+
+.. code-block:: python
+
+    def queryStatus(self):
+        if self.properties['projPowerState'] == 'ON':
+            return ['PWR?\r','SOURCE?\r']
+        else:
+            return 'PWR?\r'
+
+
 Instantiating Component
 -----------------------
 
-Once your Component class is developed you need to instantiate it at run time.  Once it is instantiated, you will then pass it as a parameter to your Thing class when you instantiated it.
+Once your Component class is developed you need to instantiate an instance of it.  Once it is instantiated, you will then pass the instance as a parameter to your Thing.
 
 Example:
 
 .. code-block:: python
 
   ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=0.5)
-  relayComponent1 = Relay(name = 'RelayComponent1', eol='\n', stream = ser, properties = { 'relayState': 'UNKNOWN' }, synchronous=True)
+  relayComponent1 = Relay(name = 'RelayComponent1', eol='\n', stream = ser, synchronous=True)
   relayThing = Thing(endpoint='<your endpoint>', thingName='relay1', rootCAPath='root-CA.crt', certificatePath='relayOne.crt',
     privateKeyPath='relayOne.private.key', region='us-east-1', components=[relayComponent1])
 
@@ -226,7 +261,7 @@ Thing Development
 
 Things handle all of the communications between pyIOT and the AWS IOT-Core service.  They also are the container for all of the components that make up the Thing.  Unless you need your Thing to update some of its components based upon changes that have just occurred, you do not need to create your own subclass of Thing.  However, if you do have that need, you can create a class that inherits from Thing and then overriding the onChange method.
 
-onChange is called whenever a component property is changing.  Its one parameter, updatedProperties, is a dictionary containing all of the properties that have changed and their new values.  onChange can use this information to determine if it wants to update any additional properties.  To do this it returns a list of tuples that contain property name and value pairs for each property that it needs to update.
+onChange is called whenever a component property is changing.  Its one parameter, updatedProperties, is a dictionary containing all of the properties that have changed and their new values.  onChange can use this information to determine if it wants to update any additional properties.  To do this it returns a dictionary that contains property name and value pairs for each property that it needs to update.
 
 Example
 
@@ -235,10 +270,87 @@ Example
   class myThing(Thing):
 
       def onChange(self, updatedProperties):
-          rv = []
+          rv = {}
           # Make sure device is always powered on and set to the 'CD' input
           if updatedProperties.get('powerState') == 'OFF':
               print ('Returning powerState to ON and input to CD')
-              rv.append(('powerState','ON'))
-              rv.append(('input', 'CD'))
+              rv['powerState'] = 'ON'
+              rv['input'] = 'CD'
           return rv
+
+Finishing pyIOT Program
+=======================
+
+The last step to writing a pyIOT program is to instantiate all of your component classes, place them within a Thing, and start the Thing.  For each of your component objects, you will need to create a `stream` which allows the object to communicate with the physical component.  If your stream class supports a timeout, you should set it to a reasonable value to allow the component read and write threads to exit gracefully.
+
+Writing a custom stream class
+-----------------------------
+
+If your component does not use a standard stream to communicate, you can write your own stream class to interact with the component.  The class must support the following methods.
+
+
+.. code-block:: python
+
+    class myStream:
+
+        def read(self, count=1):  # count (int)
+            ''' Read count number of bytes from the component '''
+
+        def write(self, val): # val (bytes)
+            ''' Write val to your component
+
+        def close(self):
+            ''' Shut down connection to stream
+
+Example:
+
+Going back to our Relay example, let's assume that the relay is activated by setting a general purpose IO pin high (such as on a RaspberryPi).  We can create our own challenge response protocol that controls that pin.
+
+Our protocol will look like the following.
+
++--------+-----------+--------------------------------------------------------------------+--------------------------------------------------+
+| Action | Command   | Variables                                                          | Returns                                          |
++========+===========+====================================================================+==================================================+
+| ON,OFF | RELAYx    | x = ON, OFF                                                        | RELAYx where                                     |
+|        |           |                                                                    | x = ON, OFF                                      |
++--------+-----------+--------------------------------------------------------------------+--------------------------------------------------+
+| query  | RELAY?    |                                                                    | RELAYx where                                     |
+|        |           |                                                                    | x = ON,  OFF                                     |
++--------+-----------+--------------------------------------------------------------------+--------------------------------------------------+
+| Error  |           |                                                                    | ERR when unexpected input is received            |
++--------+-----------+--------------------------------------------------------------------+--------------------------------------------------+
+
+.. code-block:: python
+
+    import RPi.GPIO as GPIO
+    GPIO.setmode(GPIO.BCM)
+
+    class relayStream:
+
+        def __init__(self, pin):
+            self._pin = pin
+            GPIO.setup(pin, GPIO.OUT)
+            GPIO.output(pin, 0) # Set pin low to turn relay off
+            self._relay = 'OFF'
+            self._data = b'' # For sending responses
+
+        def write( self, val ):
+            if val == 'RELAYON':
+                GPIO.output(pin, 1) # Set pin high to turn relay on
+                self._relay = 'ON'
+            elif val == 'RELAYOFF':
+                GPIO.output(pin, 0) # Set pin low to turn relay off
+                self._relay = 'OFF'
+            elif val == 'RELAY?':
+                val = 'RELAY' + self._relay
+            else:
+                val = 'ERR'
+            self._data += val.encode() + b'\n'
+
+        def read(self, n=1):
+            s = self._data[0:n]
+            self._data = self._data[n:]
+            return s
+
+        def close(self):
+            GPIO.cleanup()
