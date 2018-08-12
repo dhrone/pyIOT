@@ -33,6 +33,8 @@ class Component(object):
         self._waitFor = None # Are we waiting for a specific value from the component
         self._exit = False # Set when a request has been made to exit the component driver
         self._needQuery = True
+        self._lastRequestedStatus = 0
+        self._buffer = b'' # Buffer to hold input from component
 
         self._initializeProperties() # Determine what properties are being handled
 
@@ -40,8 +42,12 @@ class Component(object):
         self._close()
 
     def requestStatus(self):
-        ''' Request that component query the device to get its current status.  This normally happens automatically but can be commanded to occur using this method '''
-        self._needQuery = True
+
+        # to prevent query storms (when a queryStatus causes the message that you are triggering a requestStatus from) check to make sure that a requestStatus has not been processed recently
+        if time.time() > self._lastRequestedStatus+4:
+            ''' Request that component query the device to get its current status.  This normally happens automatically but can be commanded to occur using this method '''
+            self._lastRequestedStatus = time.time()
+            self._needQuery = True
 
     def _start(self, eventQueue):
         ''' Start the threads that will read and write data to the device.  If the device is asynchronous two threads will be started.  If synchronous only the write thread will be used.
@@ -345,17 +351,18 @@ class Component(object):
 
     def _readresponse(self):
         last_activity = time.time()
-        buffer = b''
+
         while True:
             c = self._stream.read()
             if c:
-                buffer += c
+                self._buffer += c
                 last_activity = time.time()
-                if buffer.find(self._eol)>=0:
-                    retval = buffer[:buffer.find(self._eol)]
+                if self._buffer.find(self._eol)>=0:
+                    retval = self._buffer[:self._buffer.find(self._eol)]
+                    self._buffer = self._buffer[len(retval)+len(self._eol):]
                     break
             elif time.time() - last_activity > self._timeout:
-                retval = buffer
+                retval = b''
                 break
         if retval:
             self._logger.debug('COMPONENT {0} READING [{1}]'.format(self.__name__, retval.decode()))
