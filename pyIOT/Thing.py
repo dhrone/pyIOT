@@ -176,6 +176,7 @@ class Thing(object):
             for property, value in updatedProperties.items():
                 if self._localShadow[property] != value:
                     self._logger.info('THING {0} updated IOT [{1}:{2}]'.format(self.__name__, property, value))
+                    self._localShadow[property] = value
                     updateNeeded = True
                     payloadDict['state']['reported'] = updatedProperties
                     payloadDict['state']['desired'] = updatedProperties

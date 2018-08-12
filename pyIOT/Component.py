@@ -19,11 +19,11 @@ class Component(object):
     '''
     _logger = logging.getLogger(__name__)
 
-    def __init__(self, name = None, stream = None, eol='\n', timeout=2.0, queryTiming=5.0, synchronous=False):
+    def __init__(self, name = None, stream = None, eol=b'\n', timeout=2.0, queryTiming=5.0, synchronous=False):
         ''' Initialize component driver and set it to receive updates from the Thing '''
 
         self._stream = stream
-        self._eol = eol
+        self._eol = eol if type(eol) == bytes else eol.encode()
         self._timeout = timeout
         self._queryTiming = queryTiming
         self._synchronous = synchronous
@@ -303,6 +303,10 @@ class Component(object):
                     break
                 elif message['action'].upper() == 'UPDATE':
                     self._logger.info('COMPONENT {0} received request [{1}:{2}]'.format(self.__name__,message['property'], message['value']))
+                    if self.properties.get(message['property']) == message['value']:
+                        self._logger.debug('COMPONENT {0} already set to [{1}:{2}].  IGNORING'.format(self.__name__,message['property'], message['value']))
+                        continue
+
                     ret = self._propertyToComponent(message['property'])
                     if ret:
                         (cmd, method) = ret
@@ -335,15 +339,11 @@ class Component(object):
                 continue
         self._logger.info('COMPONENT {0} Exiting writeLoop'.format(self.__name__))
 
-    def _read(self, eol=b'\n', timeout=2):
-        eol = eol.encode() if type(eol) is str else eol
+    def _read(self):
         with self._readlock:
-            retval = self._readresponse(eol, timeout)
-        if retval:
-            self._logger.debug('COMPONENT {0} READING [{1}]'.format(self.__name__, retval))
-        return retval
+            return self._readresponse()
 
-    def _readresponse(self, eol=b'\n', timeout=2):
+    def _readresponse(self):
         last_activity = time.time()
         buffer = b''
         while True:
@@ -351,29 +351,30 @@ class Component(object):
             if c:
                 buffer += c
                 last_activity = time.time()
-                if buffer.find(eol)>=0:
-                    retval = buffer[:buffer.find(eol)]
+                if buffer.find(self._eol)>=0:
+                    retval = buffer[:buffer.find(self._eol)]
                     break
-            elif time.time() - last_activity > timeout:
+            elif time.time() - last_activity > self._timeout:
                 retval = buffer
                 break
+        if retval:
+            self._logger.debug('COMPONENT {0} READING [{1}]'.format(self.__name__, retval.decode()))
         return retval.decode()
 
-    def _write(self, value, eol=b'\n', timeout=2, synchronous=False):
-        self._logger.debug('COMPONENT {0} WRITING {1}'.format(self.__name__, value.strip(self._eol)))
+    def _write(self, value):
+        self._logger.debug('COMPONENT {0} WRITING {1}'.format(self.__name__, value.strip(self._eol.decode())))
         value = value.encode() if type(value) is str else value
-        eol = eol.encode() if type(eol) is str else eol
 
         # If component communicates synchronously, after sending request, wait for response
         # reading input until receiving the eol value indicating that it is done responding
-        if synchronous:
+        if self._synchronous:
             with self._readlock:
                 self._stream.write(value)
-                retval = self._readresponse(eol, timeout)
+                retval = self._readresponse()
         else:
             self._stream.write(value)
-            retval = b''
-        return retval.decode()
+            retval = ''
+        return retval
 
     def _close(self):
         self._stream.close()

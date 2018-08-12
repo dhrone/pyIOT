@@ -10,7 +10,7 @@ class preampComponent(Component):
     def avmToPowerState(self, property, value):
         val = { '1': 'ON', '0': 'OFF' }.get(value)
         if val:
-            if val == 'ON':
+            if val == 'ON' and self.properties['powerState'] == 'OFF':
                 ''' When the preamp turns on, request an immediate status query '''
                 self.requestStatus()
             return val
@@ -64,7 +64,7 @@ class preampComponent(Component):
     # Command preamp to change its volume
     @Component.propertyToComponent('volume', 'P1VM{0}\n')
     def volumeToAVM(self, value):
-        if type(value) is int: return _volumeToDb(value)
+        if type(value) is int: return self._volumeToDb(value)
         raise ValueError('{0} is not a valid volume'.format(value))
 
     # Command preamp to mute or unmute
@@ -87,20 +87,20 @@ class preampComponent(Component):
 
     ''' The remaining methods are to handle the conversion from volume to db and vice-versa '''
     @staticmethod
-    def _volumeToDb(v):
+    def _computeVolumeToDb(v):
         ''' Convert a volume in the range 0 to 100 into a db value.  This provides an exponential curve from -69db to +10db. '''
         return float( -1*((100-v)**2.25)/400)+10
 
     ''' compute array of possible volume to db values '''
     _volArray = []
     for v in range (0,101):
-      _volArray.append(_volumeToDb.__func__(v))
+      _volArray.append(_computeVolumeToDb.__func__(v))
     del v
 
-    @staticmethod
-    def _volumeToDb(v):
+    @classmethod
+    def _volumeToDb(cls, v):
         ''' Get volume from volArray and round to nearest 0.5db '''
-        return int(5*round(float(_volArray[v])/5*10))/10
+        return int(5*round(float(cls._volArray[v])/5*10))/10
 
     @classmethod
     def _dbToVolume(cls, db):
@@ -136,7 +136,7 @@ class projectorComponent(Component):
     def toProjPowerState(self, property, value):
         val = { '00': 'OFF', '01': 'ON', '02': 'WARMING', '03': 'COOLING', '04': 'STANDBY', '05': 'ABNORMAL' }.get(value)
         if val:
-            if val == 'ON':
+            if val == 'ON' and self.properties['projPowerState'] == 'OFF':
                 self.requestStatus()
             return val
         raise ValueError('{0} is not a valid value for property {1}'.format(value, property))
@@ -185,23 +185,28 @@ class TVThing(Thing):
             self._logger.info('THING {0} has been turned off.  Turning it back ON and setting input to AUX.')
             rv['powerState'] = 'ON'
             rv['input'] = 'AUX'
-            rv['powerProjector'] = 'OFF'
+            rv['projPowerState'] = 'OFF'
+            rv['muted'] = False
 
         # If preamp is not set to an input associated with Video, turn projector off
-        if updatedProperties.get('powerState') == 'ON' and updatedProperties.get('input') not in ['TV', 'DVD']:
-            rv['powerProjector'] = 'OFF'
+        if 'input' in updatedProperties and updatedProperties.get('input') not in ['TV', 'DVD']:
+                rv['projPowerState'] = 'OFF'
 
         # If preamp is set to an input associated with Video, turn projector on and set to correct projector input for the chosen preamp input
-        if updatedProperties.get('powerState') == 'ON' and updatedProperties.get('input') in ['TV', 'DVD']:
-            rv['powerProjector'] = 'ON'
+        if self._localShadow.get('powerState') == 'ON' and updatedProperties.get('input') in ['TV', 'DVD']:
+            rv['projPowerState'] = 'ON'
             if updatedProperties.get('input') == 'TV':
-                rv['inputProjector'] = 'HDMI1'
+                rv['projInput'] = 'HDMI1'
             else:
-                rv['inputProjector'] = 'HDMI2'
+                rv['projInput'] = 'HDMI2'
         return rv
 
 
 if __name__ == u'__main__':
+
+    import serial
+    import logging
+    import os
 
     try:
         ''' Connected to serial interfaces for preamp and projector '''
