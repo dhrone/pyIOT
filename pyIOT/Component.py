@@ -83,7 +83,7 @@ class Component(object):
         ''' Send message to thing telling it to update its properties to reflect the component's reported state '''
         self._eventQueue.put({'source': self.__name__, 'action': 'UPDATE', 'property': property, 'value': value })
 
-        self._logger.info('COMPONENT {0} property change [{1}:{2}]'.format(self.__name__, property, value))
+        self._logger.info('{0} property change [{1}:{2}]'.format(self.__name__, property, value))
 
         # update local property value
         self.properties[property] = value
@@ -243,11 +243,11 @@ class Component(object):
 
         # Log any properties included in propertyToComponent methods that do not show up in a componentToProperty method
         for p in { k: p2cProperties[k] for k in p2cProperties if k not in c2pProperties }:
-            self._logger.warn('COMPONENT {0} has no componentToProperty method for {1}'.format(self.__name__, p))
+            self._logger.warn('{0} has no componentToProperty method for {1}'.format(self.__name__, p))
 
         # Log any properties included in componentToProperty methods that do not show up in a propertyToComponent method
         for p in { k: c2pProperties[k] for k in c2pProperties if k not in p2cProperties }:
-            self._logger.warn('COMPONENT {0} has no propertyToComponent method for {1}'.format(self.__name__, p))
+            self._logger.warn('{0} has no propertyToComponent method for {1}'.format(self.__name__, p))
 
         # Combine lists
         self.properties = p2cProperties
@@ -256,12 +256,12 @@ class Component(object):
 
     def _readLoop(self):
         ''' Main event loop for reading from component '''
-        self._logger.info('COMPONENT {0} Starting readLoop'.format(self.__name__))
+        self._logger.info('{0} Starting readLoop'.format(self.__name__))
         while not self._exit:
             val = self._read()
             if val:
                 self._processComponentResponse(val)
-        self._logger.info('COMPONENT {0} Exiting readLoop'.format(self.__name__))
+        self._logger.info('{0} Exiting readLoop'.format(self.__name__))
 
 
     def _processComponentResponse(self, val):
@@ -279,13 +279,13 @@ class Component(object):
                         # Send updated property to Thing
                         self._updateThing(property[i], xval)
                 except (ValueError, AssertionError, TypeError) as e:
-                    self._logger.warn("COMPONENT {0}'s' attempt to process response to {1} failed.  Error: {2}".format(self.__name__, val, e))
+                    self._logger.warn("{0}'s' attempt to process response to {1} failed.  Error: {2}".format(self.__name__, val, e))
         else:
-            self._logger.debug('COMPONENT {0} has no componentToProperty method that matches input [{1}]'.format(self.__name__, val))
+            self._logger.debug('{0} has no componentToProperty method that matches input [{1}]'.format(self.__name__, val))
 
     def _writeLoop(self):
         ''' Main event loop for writing to component '''
-        self._logger.info('COMPONENT {0} Starting writeLoop'.format(self.__name__))
+        self._logger.info('{0} Starting writeLoop'.format(self.__name__))
 
         while not self._exit:
             try:
@@ -294,7 +294,7 @@ class Component(object):
                 while True:
                     s = self.ready()
                     if not s: break
-                    self._logger.debug('COMPONENT {0} waiting for device to be ready.  Sleeping {1} seconds...'.format(self.__name__, s))
+                    self._logger.debug('{0} waiting for device to be ready.  Sleeping {1} seconds...'.format(self.__name__, s))
                     time.sleep(s)
                     raise queue.Empty
 
@@ -308,9 +308,9 @@ class Component(object):
                 if message['action'].upper() == 'EXIT':
                     break
                 elif message['action'].upper() == 'UPDATE':
-                    self._logger.info('COMPONENT {0} received request [{1}:{2}]'.format(self.__name__,message['property'], message['value']))
+                    self._logger.info('{0} received request [{1}:{2}]'.format(self.__name__,message['property'], message['value']))
                     if self.properties.get(message['property']) == message['value']:
-                        self._logger.debug('COMPONENT {0} already set to [{1}:{2}].  IGNORING'.format(self.__name__,message['property'], message['value']))
+                        self._logger.debug('{0} already set to [{1}:{2}].  IGNORING'.format(self.__name__,message['property'], message['value']))
                         continue
 
                     ret = self._propertyToComponent(message['property'])
@@ -322,14 +322,14 @@ class Component(object):
                             val = self._write(cmd.format(method(self,message['value'])))
                         except (ValueError, TypeError, AssertionError) as e:
                             val = None
-                            self._logger.warn('COMPONENT {0} request failed: {1}'.format(self.__name__,e))
+                            self._logger.warn('{0} request failed: {1}'.format(self.__name__,e))
 
                         # If component is synchronous, it likely returned a response from the command we just sent
                         if val:
                             # If so, process it
                             self._processComponentResponse(val)
                     else:
-                        self._logger.warn('COMPONENT {0} has no method to handle property {1}'.format(self.__name__,message['property']))
+                        self._logger.warn('{0} has no method to handle property {1}'.format(self.__name__,message['property']))
 
             except queue.Empty:
                 # If nothing waiting to be written or the component is not ready, send a query to get current component status
@@ -343,7 +343,7 @@ class Component(object):
                             self._processComponentResponse(val)
 
                 continue
-        self._logger.info('COMPONENT {0} Exiting writeLoop'.format(self.__name__))
+        self._logger.info('{0} Exiting writeLoop'.format(self.__name__))
 
     def _read(self):
         with self._readlock:
@@ -365,11 +365,11 @@ class Component(object):
                 retval = b''
                 break
         if retval:
-            self._logger.debug('COMPONENT {0} READING [{1}]'.format(self.__name__, retval.decode()))
+            self._logger.debug('{0} READING [{1}]'.format(self.__name__, retval.decode()))
         return retval.decode()
 
     def _write(self, value):
-        self._logger.debug('COMPONENT {0} WRITING {1}'.format(self.__name__, value.strip(self._eol.decode())))
+        self._logger.debug('{0} WRITING {1}'.format(self.__name__, value.strip(self._eol.decode())))
         value = value.encode() if type(value) is str else value
 
         # If component communicates synchronously, after sending request, wait for response

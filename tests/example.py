@@ -206,11 +206,11 @@ if __name__ == u'__main__':
 
     import serial
     import logging
-    import os
+    import os, sys
 
     logger = logging.getLogger('pyIOT')
     logger.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(name)-12s - %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(name)-15s - %(message)s')
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
     ch.setFormatter(formatter)
