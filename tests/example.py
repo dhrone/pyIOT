@@ -1,6 +1,7 @@
 from pyIOT import Thing, Component
 
 
+# For SPHINX: Start preampComponent
 class preampComponent(Component):
 
     ''' COMPONENT TO PROPERTY METHODS '''
@@ -126,7 +127,9 @@ class preampComponent(Component):
                 if cp == len(ar)-1: return cp # If we are at the end of the array, the value is bigger than the highest value.  Return len of array
                 s = cp
             cp = int((e-s)/2)+s
+# For SPHINX: End preampComponent
 
+# For SPHINX: Start projectorComponent
 class projectorComponent(Component):
 
 
@@ -173,7 +176,9 @@ class projectorComponent(Component):
     def ready(self):
         ''' Projector stops accepting commands while turning on or off (up to 30 seconds) '''
         return False if self.properties['projPowerState'] in ['ON', 'WARMING', 'OFF', None] else 5
+# For SPHINX: End projectorComponent
 
+# For SPHINX: Start TVThing
 class TVThing(Thing):
 
     def onChange(self, updatedProperties):
@@ -200,8 +205,9 @@ class TVThing(Thing):
             else:
                 rv['projInput'] = 'HDMI2'
         return rv
+# For SPHINX: End TVThing
 
-
+# For SPHINX: Start MAIN
 if __name__ == u'__main__':
 
     import serial
@@ -237,3 +243,4 @@ if __name__ == u'__main__':
         ''' Shut down components.  This will also cause the Thing to shut down '''
         preamp.exit()
         projector.exit()
+# For SPHINX: End MAIN
