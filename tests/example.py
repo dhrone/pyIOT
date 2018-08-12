@@ -132,16 +132,16 @@ class projectorComponent(Component):
 
     ''' COMPONENT TO PROPERTY METHODS '''
 
-    @Component.componentToProperty('projPowerState', '^PWR=([0-9]{2})$')
+    @Component.componentToProperty('projPowerState', '^PWR=([0-9]{2})\\r?$')
     def toProjPowerState(self, property, value):
         val = { '00': 'OFF', '01': 'ON', '02': 'WARMING', '03': 'COOLING', '04': 'STANDBY', '05': 'ABNORMAL' }.get(value)
         if val:
-            if val == 'ON' and self.properties['projPowerState'] == 'OFF':
+            if val in ['ON', 'WARMING'] and self.properties['projPowerState'] == 'OFF':
                 self.requestStatus()
             return val
         raise ValueError('{0} is not a valid value for property {1}'.format(value, property))
 
-    @Component.componentToProperty('projInput', '^SOURCE=([a-zA-Z0-9]{2})$')
+    @Component.componentToProperty('projInput', '^SOURCE=([a-zA-Z0-9]{2})\\r?$')
     def toProjInput(self, property, value):
         val = { '30': 'HDMI1', 'A0': 'HDMI2', '41': 'VIDEO', '42': 'S-VIDEO' }.get(value)
         if val: return val
@@ -163,7 +163,7 @@ class projectorComponent(Component):
     ''' STATUS QUERY METHOD '''
 
     def queryStatus(self):
-        if self.properties['projPowerState'] == 'ON':
+        if self.properties['projPowerState'] in ['ON', 'WARMING']:
             return ['PWR?\r','SOURCE?\r']
         else:
             return 'PWR?\r'
@@ -172,9 +172,7 @@ class projectorComponent(Component):
 
     def ready(self):
         ''' Projector stops accepting commands while turning on or off (up to 30 seconds) '''
-        return False if self.properties['projPowerState'] in ['ON', 'OFF', None] else 5
-
-
+        return False if self.properties['projPowerState'] in ['ON', 'WARMING', 'OFF', None] else 5
 
 class TVThing(Thing):
 
@@ -182,7 +180,7 @@ class TVThing(Thing):
         rv = {}
         # An Alexa dot is connected to the AUX input.  Make sure preamp is always on and set to the AUX input when not doing something else
         if updatedProperties.get('powerState') == 'OFF':
-            self._logger.info('THING {0} has been turned off.  Turning it back ON and setting input to AUX.')
+            self._logger.info('THING {0} has been turned off.  Turning it back ON and setting input to AUX.'.format(self.__name__))
             rv['powerState'] = 'ON'
             rv['input'] = 'AUX'
             rv['projPowerState'] = 'OFF'
@@ -190,10 +188,12 @@ class TVThing(Thing):
 
         # If preamp is not set to an input associated with Video, turn projector off
         if 'input' in updatedProperties and updatedProperties.get('input') not in ['TV', 'DVD']:
-                rv['projPowerState'] = 'OFF'
+            self._logger.info('THING {0} turning projector off.'.format(self.__name__))
+            rv['projPowerState'] = 'OFF'
 
         # If preamp is set to an input associated with Video, turn projector on and set to correct projector input for the chosen preamp input
         if self._localShadow.get('powerState') == 'ON' and updatedProperties.get('input') in ['TV', 'DVD']:
+            self._logger.info('THING {0} turning projector on.'.format(self.__name__))
             rv['projPowerState'] = 'ON'
             if updatedProperties.get('input') == 'TV':
                 rv['projInput'] = 'HDMI1'
@@ -208,14 +208,25 @@ if __name__ == u'__main__':
     import logging
     import os
 
+    logger = logging.getLogger('pyIOT')
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)-12s - %(message)s')
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    del logger
+    del ch
+    del formatter
+
     try:
         ''' Connected to serial interfaces for preamp and projector '''
         preampStream = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
-        projectorStream = serial.Serial('/dev/ttyUSB1', 9600, timeout=1)
+        projectorStream = serial.Serial('/dev/ttyUSB1', 9600, timeout=60)
 
         ''' instantiate Component classes '''
         preamp = preampComponent(name='AVM20', stream=preampStream)
-        projector = projectorComponent(name='EPSON1080UB', stream=projectorStream, eol='\r:', synchronous=True)
+        projector = projectorComponent(name='EPSON1080UB', stream=projectorStream, eol=':', synchronous=True)
 
         ''' instantiate Thing '''
         TV = TVThing(endpoint='aamloz0nbas89.iot.us-east-1.amazonaws.com', thingName='TV', rootCAPath='root-CA.crt', certificatePath='TV.crt', privateKeyPath='TV.private.key', region='us-east-1', components=[preamp, projector])
