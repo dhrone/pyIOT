@@ -92,7 +92,7 @@ In this example we will assume the following situation.
       return 'RELAY?\n'
 
   try:
-    ser = serial.Serial('/dev/ttyUSB0',9600, timeout=0.5)
+    ser = serial.Serial('/dev/ttyUSB0',9600, timeout=60)
     relayComponent = Relay(name = 'RelayComponent1', stream = ser, synchronous=True)
 
     relayThing = Thing(endpoint='<your endpoint>', thingName='relayOne', rootCAPath='root-CA.crt', certificatePath='relayOne.crt',
@@ -251,7 +251,7 @@ Example:
 
 .. code-block:: python
 
-  ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=0.5)
+  ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=60)
   relayComponent1 = Relay(name = 'RelayComponent1', eol='\n', stream = ser, synchronous=True)
   relayThing = Thing(endpoint='<your endpoint>', thingName='relay1', rootCAPath='root-CA.crt', certificatePath='relayOne.crt',
     privateKeyPath='relayOne.private.key', region='us-east-1', components=[relayComponent1])

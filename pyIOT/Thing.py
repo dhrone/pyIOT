@@ -72,7 +72,7 @@ class Thing(object):
 
         for property in component.properties:
             if property in self._localShadow:
-                self._logger.warn("THING {0}'s component {1} is trying to register {2} which is a property that is already in use.".format(self.__name__, component.__name__, property))
+                self._logger.warn("{0}'s component {1} is trying to register {2} which is a property that is already in use.".format(self.__name__, component.__name__, property))
             self._localShadow[property] = component.properties[property]
             self._propertyHandlers[property] = component
         component._start(self._eventQueue)
@@ -82,7 +82,7 @@ class Thing(object):
         if responseStatus == 'accepted':
             return
 
-        self._logger.warn("THING {0}'s request to delete shadow failed.  Reason given: {1}".format(self.__name__, responseStatus))
+        self._logger.warn("{0}'s request to delete shadow failed.  Reason given: {1}".format(self.__name__, responseStatus))
 
     def _updateCallback(self, payload, responseStatus, token):
         ''' Log result when a request has been made to update the IOT shadow '''
@@ -90,7 +90,7 @@ class Thing(object):
             payloadDict = json.loads(payload)
             return
 
-        self._logger.warn("THING {0}'s request to update shadow failed.  Reason given: {1}".format(self.__name__, responseStatus))
+        self._logger.warn("{0}'s request to update shadow failed.  Reason given: {1}".format(self.__name__, responseStatus))
 
     def _deltaCallback(self, payload, responseStatus, token):
         ''' Receive an delta message from IOT service and forward update requests for every included property to the event queue '''
@@ -150,7 +150,7 @@ class Thing(object):
             for message in messages:
                 if message['action'] == 'EXIT':
                     ''' If an EXIT message is received then stop processing messages and exit the main thing loop '''
-                    self._logger.info("THING {0} is exiting".format(self.__name__))
+                    self._logger.info("{0} is exiting".format(self.__name__))
                     self._iotDisconnect()
                     return
 
@@ -168,14 +168,15 @@ class Thing(object):
                                 try:
                                     self._propertyHandlers[k].updateComponent(k,v)
                                 except KeyError:
-                                    self._logger.warn("THING {0}'s onChange method requested a change for {1} which is not handled by any component".format(self.__name__,k))
+                                    self._logger.warn("{0}'s onChange method requested a change for {1} which is not handled by any component".format(self.__name__,k))
 
             ''' If there are properties to report to the IOT service, send an update message '''
             updateNeeded = False
             payloadDict = { 'state': { 'reported': {}, 'desired': {} } }
             for property, value in updatedProperties.items():
                 if self._localShadow[property] != value:
-                    self._logger.info('THING {0} updated IOT [{1}:{2}]'.format(self.__name__, property, value))
+                    self._logger.info('{0} updated IOT [{1}:{2}]'.format(self.__name__, property, value))
+                    self._localShadow[property] = value
                     updateNeeded = True
                     payloadDict['state']['reported'] = updatedProperties
                     payloadDict['state']['desired'] = updatedProperties

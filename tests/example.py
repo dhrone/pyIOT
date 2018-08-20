@@ -1,6 +1,7 @@
 from pyIOT import Thing, Component
 
 
+# For SPHINX: Start preampComponent
 class preampComponent(Component):
 
     ''' COMPONENT TO PROPERTY METHODS '''
@@ -10,7 +11,7 @@ class preampComponent(Component):
     def avmToPowerState(self, property, value):
         val = { '1': 'ON', '0': 'OFF' }.get(value)
         if val:
-            if val == 'ON':
+            if val == 'ON' and self.properties['powerState'] == 'OFF':
                 ''' When the preamp turns on, request an immediate status query '''
                 self.requestStatus()
             return val
@@ -64,7 +65,7 @@ class preampComponent(Component):
     # Command preamp to change its volume
     @Component.propertyToComponent('volume', 'P1VM{0}\n')
     def volumeToAVM(self, value):
-        if type(value) is int: return _volumeToDb(value)
+        if type(value) is int: return self._volumeToDb(value)
         raise ValueError('{0} is not a valid volume'.format(value))
 
     # Command preamp to mute or unmute
@@ -87,20 +88,20 @@ class preampComponent(Component):
 
     ''' The remaining methods are to handle the conversion from volume to db and vice-versa '''
     @staticmethod
-    def _volumeToDb(v):
+    def _computeVolumeToDb(v):
         ''' Convert a volume in the range 0 to 100 into a db value.  This provides an exponential curve from -69db to +10db. '''
         return float( -1*((100-v)**2.25)/400)+10
 
     ''' compute array of possible volume to db values '''
     _volArray = []
     for v in range (0,101):
-      _volArray.append(_volumeToDb.__func__(v))
+      _volArray.append(_computeVolumeToDb.__func__(v))
     del v
 
-    @staticmethod
-    def _volumeToDb(v):
+    @classmethod
+    def _volumeToDb(cls, v):
         ''' Get volume from volArray and round to nearest 0.5db '''
-        return int(5*round(float(_volArray[v])/5*10))/10
+        return int(5*round(float(cls._volArray[v])/5*10))/10
 
     @classmethod
     def _dbToVolume(cls, db):
@@ -126,22 +127,24 @@ class preampComponent(Component):
                 if cp == len(ar)-1: return cp # If we are at the end of the array, the value is bigger than the highest value.  Return len of array
                 s = cp
             cp = int((e-s)/2)+s
+# For SPHINX: End preampComponent
 
+# For SPHINX: Start projectorComponent
 class projectorComponent(Component):
 
 
     ''' COMPONENT TO PROPERTY METHODS '''
 
-    @Component.componentToProperty('projPowerState', '^PWR=([0-9]{2})$')
+    @Component.componentToProperty('projPowerState', '^PWR=([0-9]{2})\\r?$')
     def toProjPowerState(self, property, value):
         val = { '00': 'OFF', '01': 'ON', '02': 'WARMING', '03': 'COOLING', '04': 'STANDBY', '05': 'ABNORMAL' }.get(value)
         if val:
-            if val == 'ON':
+            if val in ['ON', 'WARMING'] and self.properties['projPowerState'] == 'OFF':
                 self.requestStatus()
             return val
         raise ValueError('{0} is not a valid value for property {1}'.format(value, property))
 
-    @Component.componentToProperty('projInput', '^SOURCE=([a-zA-Z0-9]{2})$')
+    @Component.componentToProperty('projInput', '^SOURCE=([a-zA-Z0-9]{2})\\r?$')
     def toProjInput(self, property, value):
         val = { '30': 'HDMI1', 'A0': 'HDMI2', '41': 'VIDEO', '42': 'S-VIDEO' }.get(value)
         if val: return val
@@ -163,7 +166,7 @@ class projectorComponent(Component):
     ''' STATUS QUERY METHOD '''
 
     def queryStatus(self):
-        if self.properties['projPowerState'] == 'ON':
+        if self.properties['projPowerState'] in ['ON', 'WARMING']:
             return ['PWR?\r','SOURCE?\r']
         else:
             return 'PWR?\r'
@@ -172,45 +175,64 @@ class projectorComponent(Component):
 
     def ready(self):
         ''' Projector stops accepting commands while turning on or off (up to 30 seconds) '''
-        return False if self.properties['projPowerState'] in ['ON', 'OFF', None] else 5
+        return False if self.properties['projPowerState'] in ['ON', 'WARMING', 'OFF', None] else 5
+# For SPHINX: End projectorComponent
 
-
-
+# For SPHINX: Start TVThing
 class TVThing(Thing):
 
     def onChange(self, updatedProperties):
         rv = {}
         # An Alexa dot is connected to the AUX input.  Make sure preamp is always on and set to the AUX input when not doing something else
         if updatedProperties.get('powerState') == 'OFF':
-            self._logger.info('THING {0} has been turned off.  Turning it back ON and setting input to AUX.')
+            self._logger.info('THING {0} has been turned off.  Turning it back ON and setting input to AUX.'.format(self.__name__))
             rv['powerState'] = 'ON'
             rv['input'] = 'AUX'
-            rv['powerProjector'] = 'OFF'
+            rv['projPowerState'] = 'OFF'
+            rv['muted'] = False
 
         # If preamp is not set to an input associated with Video, turn projector off
-        if updatedProperties.get('powerState') == 'ON' and updatedProperties.get('input') not in ['TV', 'DVD']:
-            rv['powerProjector'] = 'OFF'
+        if 'input' in updatedProperties and updatedProperties.get('input') not in ['TV', 'DVD']:
+            self._logger.info('THING {0} turning projector off.'.format(self.__name__))
+            rv['projPowerState'] = 'OFF'
 
         # If preamp is set to an input associated with Video, turn projector on and set to correct projector input for the chosen preamp input
-        if updatedProperties.get('powerState') == 'ON' and updatedProperties.get('input') in ['TV', 'DVD']:
-            rv['powerProjector'] = 'ON'
+        if self._localShadow.get('powerState') == 'ON' and updatedProperties.get('input') in ['TV', 'DVD']:
+            self._logger.info('THING {0} turning projector on.'.format(self.__name__))
+            rv['projPowerState'] = 'ON'
             if updatedProperties.get('input') == 'TV':
-                rv['inputProjector'] = 'HDMI1'
+                rv['projInput'] = 'HDMI1'
             else:
-                rv['inputProjector'] = 'HDMI2'
+                rv['projInput'] = 'HDMI2'
         return rv
+# For SPHINX: End TVThing
 
-
+# For SPHINX: Start MAIN
 if __name__ == u'__main__':
+
+    import serial
+    import logging
+    import os, sys
+
+    logger = logging.getLogger('pyIOT')
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)-15s - %(message)s')
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    del logger
+    del ch
+    del formatter
 
     try:
         ''' Connected to serial interfaces for preamp and projector '''
         preampStream = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
-        projectorStream = serial.Serial('/dev/ttyUSB1', 9600, timeout=1)
+        projectorStream = serial.Serial('/dev/ttyUSB1', 9600, timeout=60)
 
         ''' instantiate Component classes '''
         preamp = preampComponent(name='AVM20', stream=preampStream)
-        projector = projectorComponent(name='EPSON1080UB', stream=projectorStream, eol='\r:', synchronous=True)
+        projector = projectorComponent(name='EPSON1080UB', stream=projectorStream, eol=':', synchronous=True)
 
         ''' instantiate Thing '''
         TV = TVThing(endpoint='aamloz0nbas89.iot.us-east-1.amazonaws.com', thingName='TV', rootCAPath='root-CA.crt', certificatePath='TV.crt', privateKeyPath='TV.private.key', region='us-east-1', components=[preamp, projector])
@@ -221,3 +243,4 @@ if __name__ == u'__main__':
         ''' Shut down components.  This will also cause the Thing to shut down '''
         preamp.exit()
         projector.exit()
+# For SPHINX: End MAIN

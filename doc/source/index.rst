@@ -12,11 +12,9 @@ pyIOT
 .. moduleauthor:: dhrone
 .. module:: pyIOT
 
-pyIOT enables rapid integration of a device with the Amazon AWS IOT-Core service.
+Want to write your own IOT device?  pyIOT makes it easy.  It enables rapid integration of a device with the Amazon AWS IOT-Core service.
 
 .. image:: _static/pyIOT_System.jpg
-
-.. automodule:: pyIOT
 
 
 User Guide
