@@ -14,8 +14,15 @@ setuptools.setup(
     url="https://github.com/dhrone/pyIOT",
     packages=setuptools.find_packages(),
     classifiers=[
+        "Development Status :: 3 - Alpha",
+        "Intended Audience :: Developers",
+        "Topic :: Software Development :: Embedded Systems",
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
+    ],
+    install_requires=[
+          'pyserial',
+          'awsiotpythonsdk',
     ],
 )
