@@ -6,7 +6,8 @@ pyIOT abstracts the AWS IOT-Core service handling all of the communications betw
 
 A simple pyIOT application looks as follows...
 
-`
+```python
+
 import serial
 import pyIOT
 
@@ -35,4 +36,4 @@ try:
   relayThing.start()
 except KeyboardInterrupt:
   relayComponent.exit()
-`
+```
