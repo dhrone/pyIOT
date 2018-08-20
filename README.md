@@ -1,5 +1,6 @@
 # pyIOT
 ![pyIOT Diagram](doc/source/_static/pyIOT_System.jpg)
+
 A python module to simplify writing device drivers for the Amazon AWS IOT service
 
 pyIOT abstracts the AWS IOT-Core service handling all of the communications between it and our device.  To implement a pyIOT application, you only need to specify how to convert from the protocol of your device into the properties that you want to expose to IOT-Core and vice-versa.  This enables IOT-Core applications to be written in a handful of lines of code.
