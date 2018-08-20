@@ -1,5 +1,5 @@
 # pyIOT
-![pyIOT Diagram](doc/source/_static/pyIOT_System.jpg)
+![pyIOT Diagram](https://raw.githubusercontent.com/dhrone/pyIOT/master/doc/source/_static/pyIOT_System.jpg)
 
 A python module to simplify writing device drivers for the Amazon AWS IOT service
 
